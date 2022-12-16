@@ -21,6 +21,7 @@ from datadog_checks.postgres.statements import PostgresStatementMetrics
 from .config import PostgresConfig
 from .util import (
     CONNECTION_METRICS,
+    BUFFERCACHE_METRICS,
     FUNCTION_METRICS,
     QUERY_PG_STAT_DATABASE,
     REPLICATION_METRICS,
@@ -28,7 +29,7 @@ from .util import (
     fmt,
     get_schema_field,
 )
-from .version_utils import V9, V9_2, V10, VersionUtils
+from .version_utils import V9, V9_2, V9_6, V10, VersionUtils
 
 try:
     import datadog_agent
@@ -366,6 +367,8 @@ class PostgreSql(AgentCheck):
 
         if self._config.collect_function_metrics:
             metric_scope.append(FUNCTION_METRICS)
+        if self._config.collect_buffercache_metrics and self.version >= V9_6:
+            metric_scope.append(BUFFERCACHE_METRICS)
         if self._config.collect_count_metrics:
             metric_scope.append(self.metrics_cache.get_count_metrics())
 

@@ -246,6 +246,25 @@ SELECT s.schemaname,
     'relation': False,
 }
 
+BUFFERCACHE_METRICS = {
+    'descriptors': [('relname', 'relation')],
+    'metrics': {
+        'count(*)': ('postgresql.buffercache.buffers', AgentCheck.gauge),
+        'count(CASE WHEN b.isdirty THEN 1 END)': ('postgresql.buffercache.dirty_buffers', AgentCheck.gauge),
+        'sum(b.usagecount)': ('postgresql.buffercache.usage_count', AgentCheck.gauge),
+        'sum(b.pinning_backends)': ('postgresql.buffercache.pinning_backends', AgentCheck.gauge),
+    },
+    'query': """
+SELECT (CASE WHEN c.relname IS NULL THEN 'free' ELSE c.relname END) as relname,
+    {metrics_columns}
+    FROM pg_buffercache b
+    left JOIN pg_class c
+        ON b.relfilenode = pg_relation_filenode(c.oid)
+    GROUP BY c.relname;
+""",
+    'relation': False,
+}
+
 # The metrics we retrieve from pg_stat_activity when the postgres version >= 9.6
 ACTIVITY_METRICS_9_6 = [
     "SUM(CASE WHEN xact_start IS NOT NULL THEN 1 ELSE 0 END)",
