@@ -9,7 +9,7 @@ import pytest
 from semver import VersionInfo
 
 from datadog_checks.postgres import PostgreSql
-from datadog_checks.postgres.util import PartialFormatter, fmt
+from datadog_checks.postgres.util import PartialFormatter, BUFFERCACHE_METRICS, fmt
 
 from .common import (
     COMMON_METRICS,
@@ -23,6 +23,7 @@ from .common import (
     requires_static_version,
 )
 from .utils import requires_over_10
+
 
 CONNECTION_METRICS = ['postgresql.max_connections', 'postgresql.percent_usage_connections']
 
@@ -130,6 +131,16 @@ def test_connections_metrics(aggregator, integration_check, pg_instance):
         aggregator.assert_metric(name, count=1, tags=expected_tags)
     expected_tags += ['db:datadog_test']
     aggregator.assert_metric('postgresql.connections', count=1, tags=expected_tags)
+
+
+def test_buffercache_metrics(aggregator, integration_check, pg_instance):
+    pg_instance['collect_buffercache_metrics'] = False
+    check = integration_check(pg_instance)
+    check.check(pg_instance)
+
+    expected_tags = pg_instance['tags'] + ['port:{}'.format(PORT)]
+    for metric in BUFFERCACHE_METRICS['metrics'].values():
+        aggregator.assert_metric(metric[0], count=1, tags=expected_tags)
 
 
 def test_locks_metrics_no_relations(aggregator, integration_check, pg_instance):
