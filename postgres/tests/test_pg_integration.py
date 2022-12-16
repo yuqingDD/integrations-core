@@ -22,7 +22,7 @@ from .common import (
     check_common_metrics,
     requires_static_version,
 )
-from .utils import requires_over_10
+from .utils import requires_over_10, requires_over_96
 
 
 CONNECTION_METRICS = ['postgresql.max_connections', 'postgresql.percent_usage_connections']
@@ -133,14 +133,64 @@ def test_connections_metrics(aggregator, integration_check, pg_instance):
     aggregator.assert_metric('postgresql.connections', count=1, tags=expected_tags)
 
 
+@requires_over_96
 def test_buffercache_metrics(aggregator, integration_check, pg_instance):
-    pg_instance['collect_buffercache_metrics'] = False
+    pg_instance['collect_buffercache_metrics'] = True
     check = integration_check(pg_instance)
     check.check(pg_instance)
 
+    relnames = [
+        'pg_operator',
+        'pg_statistic',
+        'pg_amop_fam_strat_index',
+        'pg_type_oid_index',
+        'pg_db_role_setting_databaseid_rol_index',
+        'pg_class_relname_nsp_index',
+        'pg_amop_opr_fam_index',
+        'pg_tablespace',
+        'pg_amproc',
+        'pg_namespace',
+        'pg_opclass_am_name_nsp_index',
+        'pg_index',
+        'pg_index_indexrelid_index',
+        'pg_tablespace_oid_index',
+        'pg_database',
+        'pg_am',
+        'pg_cast',
+        'pg_type',
+        'pg_attribute',
+        'pg_cast_source_target_index',
+        'pg_proc_oid_index',
+        'pg_class',
+        'pg_authid',
+        'pg_opclass',
+        'pg_class_oid_index',
+        'pg_rewrite',
+        'pg_opclass_oid_index',
+        'pg_operator_oprname_l_r_n_index',
+        'pg_type_typname_nsp_index',
+        'pg_statistic_ext_relid_index',
+        'pg_database_oid_index',
+        'pg_namespace_nspname_index',
+        'pg_aggregate',
+        'pg_attribute_relid_attnum_index',
+        'pg_operator_oid_index',
+        'pg_proc',
+        'pg_statistic_relid_att_inh_index',
+        'pg_index_indrelid_index',
+        'pg_rewrite_rel_rulename_index',
+        'pg_proc_proname_args_nsp_index',
+        'pg_aggregate_fnoid_index',
+        'pg_class_tblspc_relfilenode_index',
+        'pg_amproc_fam_proc_index',
+        'pg_amop',
+    ]
     expected_tags = pg_instance['tags'] + ['port:{}'.format(PORT)]
+
     for metric in BUFFERCACHE_METRICS['metrics'].values():
-        aggregator.assert_metric(metric[0], count=1, tags=expected_tags)
+        for relname in relnames:
+            aggregator.assert_metric(metric[0], count=1, tags=expected_tags + ['relation:{}'.format(relname)])
+    aggregator.assert_metric('postgresql.buffercache.buffers', count=1, tags=expected_tags + ['relation:free'])
 
 
 def test_locks_metrics_no_relations(aggregator, integration_check, pg_instance):
