@@ -8,6 +8,7 @@ from datadog_checks.base import ConfigurationError, is_affirmative
 from datadog_checks.base.log import CheckLoggingAdapter
 from datadog_checks.base.types import InitConfigType
 from datadog_checks.vsphere.constants import (
+    ALL_RESOURCES_WITH_METRICS,
     ALLOWED_FILTER_PROPERTIES,
     ALLOWED_FILTER_TYPES,
     DEFAULT_BATCH_COLLECTOR_SIZE,
@@ -20,10 +21,9 @@ from datadog_checks.vsphere.constants import (
     DEFAULT_VSPHERE_ATTR_PREFIX,
     DEFAULT_VSPHERE_TAG_PREFIX,
     EXTRA_FILTER_PROPERTIES_FOR_VMS,
-    HISTORICAL_RESOURCES,
     MOR_TYPE_AS_STRING,
-    REALTIME_RESOURCES,
 )
+from datadog_checks.vsphere.metrics import RESOURCES_WITH_HISTORICAL_METRICS, RESOURCES_WITH_REALTIME_METRICS
 from datadog_checks.vsphere.resource_filters import ResourceFilter, create_resource_filter
 from datadog_checks.vsphere.types import InstanceConfig, MetricFilterConfig, MetricFilters, ResourceFilterConfig
 
@@ -86,11 +86,11 @@ class VSphereConfig(object):
 
         # Utility
         if self.collection_type == 'both':
-            self.collected_resource_types = REALTIME_RESOURCES + HISTORICAL_RESOURCES
+            self.collected_resource_types = ALL_RESOURCES_WITH_METRICS
         elif self.collection_type == 'historical':
-            self.collected_resource_types = HISTORICAL_RESOURCES
+            self.collected_resource_types = RESOURCES_WITH_HISTORICAL_METRICS
         else:
-            self.collected_resource_types = REALTIME_RESOURCES
+            self.collected_resource_types = RESOURCES_WITH_REALTIME_METRICS
 
         # Filters
         self.resource_filters = self._parse_resource_filters(instance.get("resource_filters", []))
