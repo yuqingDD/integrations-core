@@ -40,9 +40,6 @@
         "metadata_path": "assets/service_checks.json"
       }
     },
-    "dashboards": {
-          "ArgoCD Overview": "assets/dashboards/overview.json"
-    },
     "monitors": {
           "Build Status": "assets/recommended_monitors/application_sync_status.json"
     },
