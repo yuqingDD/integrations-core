@@ -40,6 +40,9 @@
         "metadata_path": "assets/service_checks.json"
       }
     },
+    "monitors": {
+      "Sync Status": "assets/recommended_monitors/application_sync_status.json"
+    },
     "logs": {}
   },
   "author": {
