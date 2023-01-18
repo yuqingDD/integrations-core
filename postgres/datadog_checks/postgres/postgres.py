@@ -25,6 +25,7 @@ from .util import (
     QUERY_PG_STAT_DATABASE,
     REPLICATION_METRICS,
     SLRU_METRICS,
+    WAL_FILE_METRICS,
     DatabaseConfigurationError,
     fmt,
     get_schema_field,
@@ -146,7 +147,11 @@ class PostgreSql(AgentCheck):
         return "standby" if role else "master"
 
     def _collect_wal_metrics(self, instance_tags):
-        wal_file_age = self._get_wal_file_age()
+        if self.version >= V10:
+            # _collect_stats will gather wal file metrics
+            # for PG >= V10
+            return
+        wal_file_age = self._get_local_wal_file_age()
         if wal_file_age is not None:
             self.gauge(
                 "postgresql.wal_age",
@@ -155,18 +160,8 @@ class PostgreSql(AgentCheck):
                 hostname=self.resolved_hostname,
             )
 
-    def _get_wal_dir(self):
-        if self.version >= V10:
-            wal_dir = "pg_wal"
-        else:
-            wal_dir = "pg_xlog"
-
-        wal_log_dir = os.path.join(self._config.data_directory, wal_dir)
-
-        return wal_log_dir
-
-    def _get_wal_file_age(self):
-        wal_log_dir = self._get_wal_dir()
+    def _get_local_wal_file_age(self):
+        wal_log_dir = os.path.join(self._config.data_directory, "pg_xlog")
         if not os.path.isdir(wal_log_dir):
             self.log.warning(
                 "Cannot access WAL log directory: %s. Ensure that you are "
@@ -369,6 +364,8 @@ class PostgreSql(AgentCheck):
             metric_scope.append(FUNCTION_METRICS)
         if self._config.collect_count_metrics:
             metric_scope.append(self.metrics_cache.get_count_metrics())
+        if self.version >= V10:
+            metric_scope.append(WAL_FILE_METRICS)
         if self.version >= V13:
             metric_scope.append(SLRU_METRICS)
 

@@ -248,6 +248,20 @@ SELECT name, {metrics_columns}
 """,
 }
 
+WAL_FILE_METRICS = {
+    'descriptors': [],
+    'metrics': {
+        'count(*)': ('postgresql.wal_count', AgentCheck.gauge),
+        'sum(size)': ('postgresql.wal_size', AgentCheck.gauge),
+        'EXTRACT (EPOCH FROM now() - max(modification))': ('postgresql.wal_age', AgentCheck.gauge),
+    },
+    'relation': False,
+    'query': """
+SELECT {metrics_columns}
+  FROM pg_ls_waldir()
+""",
+}
+
 FUNCTION_METRICS = {
     'descriptors': [('schemaname', 'schema'), ('funcname', 'function')],
     'metrics': {
