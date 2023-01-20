@@ -25,6 +25,7 @@ from .util import (
     QUERY_PG_STAT_DATABASE,
     REPLICATION_METRICS,
     SLRU_METRICS,
+    WAL_METRICS,
     DatabaseConfigurationError,
     fmt,
     get_schema_field,
@@ -371,6 +372,8 @@ class PostgreSql(AgentCheck):
             metric_scope.append(self.metrics_cache.get_count_metrics())
         if self.version >= V13:
             metric_scope.append(SLRU_METRICS)
+        if self.version >= V14:
+            metric_scope.append(WAL_METRICS)
 
         # Do we need relation-specific metrics?
         if self._config.relations:

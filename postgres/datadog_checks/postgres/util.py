@@ -248,6 +248,25 @@ SELECT name, {metrics_columns}
 """,
 }
 
+WAL_METRICS = {
+    "descriptors": [],
+    "metrics": {
+        "wal_records": ("postgresql.wal.records", AgentCheck.monotonic_count),
+        "wal_fpi": ("postgresql.wal.full_page_images", AgentCheck.monotonic_count),
+        "wal_bytes": ("postgresql.wal.bytes", AgentCheck.monotonic_count),
+        "wal_buffers_full": ("postgresql.wal.buffers_full", AgentCheck.monotonic_count),
+        "wal_write": ("postgresql.wal.write", AgentCheck.monotonic_count),
+        "wal_sync": ("postgresql.wal.sync", AgentCheck.monotonic_count),
+        "wal_write_time": ("postgresql.wal.write_time", AgentCheck.monotonic_count),
+        "wal_sync_time": ("postgresql.wal.sync_time", AgentCheck.monotonic_count),
+    },
+    "relation": False,
+    "query": """
+SELECT {metrics_columns}
+  FROM pg_stat_wal
+""",
+}
+
 FUNCTION_METRICS = {
     'descriptors': [('schemaname', 'schema'), ('funcname', 'function')],
     'metrics': {

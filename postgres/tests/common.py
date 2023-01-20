@@ -7,7 +7,7 @@ from sys import maxsize
 import pytest
 
 from datadog_checks.dev import get_docker_hostname
-from datadog_checks.postgres.util import SLRU_METRICS
+from datadog_checks.postgres.util import SLRU_METRICS, WAL_METRICS
 
 HOST = get_docker_hostname()
 PORT = '5432'
@@ -128,3 +128,11 @@ def check_slru_metrics(aggregator, expected_tags, count=1):
     for (metric_name, _) in SLRU_METRICS['metrics'].values():
         for slru_cache in slru_caches:
             aggregator.assert_metric(metric_name, count=count, tags=expected_tags + ['slru_name:{}'.format(slru_cache)])
+
+
+def check_wal_metrics(aggregator, expected_tags, count=1):
+    if float(POSTGRES_VERSION) < 14.0:
+        return
+
+    for (metric_name, _) in WAL_METRICS['metrics'].values():
+        aggregator.assert_metric(metric_name, count=count, tags=expected_tags)
