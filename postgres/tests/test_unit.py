@@ -6,13 +6,12 @@ import copy
 import mock
 import psycopg2
 import pytest
-from mock import MagicMock, PropertyMock
+from mock import MagicMock
 from pytest import fail
 from semver import VersionInfo
 from six import iteritems
 
 from datadog_checks.postgres import PostgreSql, util
-from datadog_checks.postgres.version_utils import VersionUtils
 
 from .common import PORT
 
