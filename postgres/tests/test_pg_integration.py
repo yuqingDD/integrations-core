@@ -29,7 +29,7 @@ from .common import (
     check_wal_metrics,
     requires_static_version,
 )
-from .utils import requires_over_10
+from .utils import requires_over_10, requires_over_14
 
 CONNECTION_METRICS = ['postgresql.max_connections', 'postgresql.percent_usage_connections']
 
@@ -325,6 +325,7 @@ def test_state_clears_on_connection_error(integration_check, pg_instance):
     assert_state_clean(check)
 
 
+@requires_over_14
 def test_wal_stats(aggregator, integration_check, pg_instance):
     with psycopg2.connect(host=HOST, dbname=DB_NAME, user="postgres", password="datad0g") as conn:
         with conn.cursor() as cur:
