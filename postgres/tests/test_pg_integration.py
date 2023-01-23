@@ -9,6 +9,7 @@ import psycopg2
 import pytest
 from semver import VersionInfo
 
+from datadog_checks.base.stubs.aggregator import normalize_tags
 from datadog_checks.postgres import PostgreSql
 from datadog_checks.postgres.util import PartialFormatter, fmt
 
@@ -180,13 +181,19 @@ def test_activity_metrics_no_aggregations(aggregator, integration_check, pg_inst
     check_activity_metrics(aggregator, expected_tags)
 
 
-def assert_metric_at_least(aggregator, metric_name, expected_tag, count, lower_bound):
+def assert_metric_at_least(aggregator, metric_name, lower_bound=None, count=None, tags=None):
     found_values = 0
+    expected_tags = normalize_tags(tags, sort=True)
     for metric in aggregator.metrics(metric_name):
-        if expected_tag in metric.tags:
-            assert metric.value >= lower_bound
+        if expected_tags and expected_tags == sorted(metric.tags):
+            assert metric.value >= lower_bound, 'Expected {} with tags {} to have a value >= {}, got {}'.format(
+                metric_name, expected_tags, lower_bound, metric.value
+            )
             found_values += 1
-    assert found_values == count
+    if count:
+        assert found_values == count, 'Expected to have {} with tags {} values for metric {}, got {}'.format(
+            count, expected_tags, metric_name, found_values
+        )
 
 
 def test_backend_transaction_age(aggregator, integration_check, pg_instance):
@@ -258,7 +265,7 @@ def test_backend_transaction_age(aggregator, integration_check, pg_instance):
 
     # Check that xact_start_age has a value greater than the trasaction_age lower bound
     aggregator.assert_metric('postgresql.activity.xact_start_age', count=1, tags=test_tags)
-    assert_metric_at_least(aggregator, 'postgresql.activity.xact_start_age', 'app:test', 1, transaction_age_lower_bound)
+    assert_metric_at_least(aggregator, 'postgresql.activity.xact_start_age', tags=test_tags, count=1, lower_bound=transaction_age_lower_bound)
 
 
 @requires_over_10
@@ -310,6 +317,36 @@ def test_state_clears_on_connection_error(integration_check, pg_instance):
         with pytest.raises(socket.error):
             check.check(pg_instance)
     assert_state_clean(check)
+
+
+def test_wal_stats(aggregator, integration_check, pg_instance):
+    with psycopg2.connect(host=HOST, dbname=DB_NAME, user="postgres", password="datad0g") as conn:
+        with conn.cursor() as cur:
+            cur.execute("select wal_records, wal_bytes from pg_stat_wal;")
+            (wal_records, wal_bytes) = cur.fetchall()[0]
+            cur.execute("insert into persons (lastname) values ('test');")
+
+    # Wait for pg_stat_wal to be updated
+    for i in range(5):
+        time.sleep(0.1)
+        with psycopg2.connect(host=HOST, dbname=DB_NAME, user="postgres", password="datad0g") as conn:
+            with conn.cursor() as cur:
+                cur.execute("select wal_records, wal_bytes from pg_stat_wal;")
+                (new_wal_records, new_wal_bytes) = cur.fetchall()[0]
+                if new_wal_records > wal_records:
+                    break
+
+    check = integration_check(pg_instance)
+    check.check(pg_instance)
+
+    expected_tags = pg_instance['tags'] + ['port:{}'.format(PORT)]
+    aggregator.assert_metric('postgresql.wal.records', count=1, tags=expected_tags)
+    aggregator.assert_metric('postgresql.wal.bytes', count=1, tags=expected_tags)
+
+    # Expect at least one Heap + one Transaction additional records
+    assert_metric_at_least(aggregator, 'postgresql.wal.records', tags=expected_tags, count=1, lower_bound=wal_records + 3)
+    # We should have at least one full page write
+    assert_metric_at_least(aggregator, 'postgresql.wal.bytes', tags=expected_tags, count=1, lower_bound=wal_bytes + 100)
 
 
 def test_query_timeout(aggregator, integration_check, pg_instance):
