@@ -265,7 +265,13 @@ def test_backend_transaction_age(aggregator, integration_check, pg_instance):
 
     # Check that xact_start_age has a value greater than the trasaction_age lower bound
     aggregator.assert_metric('postgresql.activity.xact_start_age', count=1, tags=test_tags)
-    assert_metric_at_least(aggregator, 'postgresql.activity.xact_start_age', tags=test_tags, count=1, lower_bound=transaction_age_lower_bound)
+    assert_metric_at_least(
+        aggregator,
+        'postgresql.activity.xact_start_age',
+        tags=test_tags,
+        count=1,
+        lower_bound=transaction_age_lower_bound,
+    )
 
 
 @requires_over_10
@@ -344,7 +350,9 @@ def test_wal_stats(aggregator, integration_check, pg_instance):
     aggregator.assert_metric('postgresql.wal.bytes', count=1, tags=expected_tags)
 
     # Expect at least one Heap + one Transaction additional records
-    assert_metric_at_least(aggregator, 'postgresql.wal.records', tags=expected_tags, count=1, lower_bound=wal_records + 3)
+    assert_metric_at_least(
+        aggregator, 'postgresql.wal.records', tags=expected_tags, count=1, lower_bound=wal_records + 3
+    )
     # We should have at least one full page write
     assert_metric_at_least(aggregator, 'postgresql.wal.bytes', tags=expected_tags, count=1, lower_bound=wal_bytes + 100)
 
