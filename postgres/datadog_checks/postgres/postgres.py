@@ -30,7 +30,7 @@ from .util import (
     fmt,
     get_schema_field,
 )
-from .version_utils import V9, V9_2, V10, V13, VersionUtils
+from .version_utils import V9, V9_2, V10, V13, V14, VersionUtils
 
 try:
     import datadog_agent
