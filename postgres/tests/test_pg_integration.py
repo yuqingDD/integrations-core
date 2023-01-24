@@ -25,9 +25,10 @@ from .common import (
     check_connection_metrics,
     check_db_count,
     check_slru_metrics,
+    check_tx_metrics,
     requires_static_version,
 )
-from .utils import requires_over_10
+from .utils import requires_over_10, requires_over_13
 
 CONNECTION_METRICS = ['postgresql.max_connections', 'postgresql.percent_usage_connections']
 
@@ -44,8 +45,35 @@ def test_common_metrics(aggregator, integration_check, pg_instance):
     check_connection_metrics(aggregator, expected_tags=expected_tags)
     check_db_count(aggregator, expected_tags=expected_tags)
     check_slru_metrics(aggregator, expected_tags=expected_tags)
+    check_tx_metrics(aggregator, expected_tags=expected_tags)
 
     aggregator.assert_all_metrics_covered()
+
+
+@requires_over_13
+def test_tx_xmin(aggregator, integration_check, pg_instance):
+    with psycopg2.connect(host=HOST, dbname=DB_NAME, user="postgres", password="datad0g") as conn:
+        with conn.cursor() as cur:
+            cur.execute('select pg_snapshot_xmin(pg_current_snapshot());')
+            xmin = float(cur.fetchall()[0][0])
+
+    expected_tags = pg_instance['tags'] + ['port:{}'.format(PORT)]
+
+    check = integration_check(pg_instance)
+    check.check(pg_instance)
+    aggregator.assert_metric('postgresql.transactions.xmin', value=xmin, count=1, tags=expected_tags)
+
+    with psycopg2.connect(host=HOST, dbname=DB_NAME, user="postgres", password="datad0g") as conn:
+        # Force autocommit
+        conn.set_session(autocommit=True)
+        with conn.cursor() as cur:
+            # Force increases of txid
+            cur.execute('select txid_current();')
+            cur.execute('select txid_current();')
+
+    check = integration_check(pg_instance)
+    check.check(pg_instance)
+    aggregator.assert_metric('postgresql.transactions.xmin', value=xmin + 2, count=1, tags=expected_tags)
 
 
 def test_common_metrics_without_size(aggregator, integration_check, pg_instance):
