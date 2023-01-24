@@ -55,13 +55,13 @@ def test_tx_xmin(aggregator, integration_check, pg_instance):
     with psycopg2.connect(host=HOST, dbname=DB_NAME, user="postgres", password="datad0g") as conn:
         with conn.cursor() as cur:
             cur.execute('select pg_snapshot_xmin(pg_current_snapshot());')
-            xmin = float(cur.fetchall()[0][0])
+            xid = float(cur.fetchall()[0][0])
 
     expected_tags = pg_instance['tags'] + ['port:{}'.format(PORT)]
 
     check = integration_check(pg_instance)
     check.check(pg_instance)
-    aggregator.assert_metric('postgresql.transactions.xmin', value=xmin, count=1, tags=expected_tags)
+    aggregator.assert_metric('postgresql.transactions.xid', value=xid, count=1, tags=expected_tags)
 
     with psycopg2.connect(host=HOST, dbname=DB_NAME, user="postgres", password="datad0g") as conn:
         # Force autocommit
@@ -73,7 +73,7 @@ def test_tx_xmin(aggregator, integration_check, pg_instance):
 
     check = integration_check(pg_instance)
     check.check(pg_instance)
-    aggregator.assert_metric('postgresql.transactions.xmin', value=xmin + 2, count=1, tags=expected_tags)
+    aggregator.assert_metric('postgresql.transactions.xid', value=xid + 2, count=1, tags=expected_tags)
 
 
 def test_common_metrics_without_size(aggregator, integration_check, pg_instance):
