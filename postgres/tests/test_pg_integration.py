@@ -334,7 +334,7 @@ def test_wal_stats(aggregator, integration_check, pg_instance):
             cur.execute("insert into persons (lastname) values ('test');")
 
     # Wait for pg_stat_wal to be updated
-    for i in range(5):
+    for _ in range(5):
         time.sleep(0.1)
         with psycopg2.connect(host=HOST, dbname=DB_NAME, user="postgres", password="datad0g") as conn:
             with conn.cursor() as cur:
