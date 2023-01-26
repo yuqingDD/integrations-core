@@ -7,7 +7,7 @@ from sys import maxsize
 import pytest
 
 from datadog_checks.dev import get_docker_hostname
-from datadog_checks.postgres.util import SLRU_METRICS, TX_METRICS 
+from datadog_checks.postgres.util import SLRU_METRICS, TX_METRICS
 
 HOST = get_docker_hostname()
 PORT = '5432'
