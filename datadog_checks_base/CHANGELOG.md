@@ -1,10 +1,10 @@
 # CHANGELOG - datadog_checks_base
 
-## 28.0.2 / 2023-01-27
+## 28.0.2 / 2023-01-27 / Agent 7.42.1
 
 * [Fixed] Backport snowflake-connector-python bump 2.8.3 to 7.42.x. See [#13794](https://github.com/DataDog/integrations-core/pull/13794).
 
-## 28.0.1 / 2022-12-16
+## 28.0.1 / 2022-12-16 / Agent 7.42.0
 
 * [Fixed] Fixed incorrect counter type determination and error reporting on the first collection. See [#13489](https://github.com/DataDog/integrations-core/pull/13489).
 
@@ -21,7 +21,7 @@
 * [Fixed] Remove `default_backend` parameter from cryptography calls. See [#13333](https://github.com/DataDog/integrations-core/pull/13333).
 * [Fixed] Update protobuf. See [#13262](https://github.com/DataDog/integrations-core/pull/13262).
 
-## 27.4.2 / 2022-10-28
+## 27.4.2 / 2022-10-28 / Agent 7.41.0
 
 * [Fixed] Update dependencies. See [#13205](https://github.com/DataDog/integrations-core/pull/13205) and [#13207](https://github.com/DataDog/integrations-core/pull/13207).
 * [Fixed] Make OpenMetrics checks honor `empty_default_hostname` option. See [#13146](https://github.com/DataDog/integrations-core/pull/13146).

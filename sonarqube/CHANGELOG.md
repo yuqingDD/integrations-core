@@ -1,6 +1,6 @@
 # CHANGELOG - SonarQube
 
-## 2.2.2 / 2022-12-23
+## 2.2.2 / 2022-12-23 / Agent 7.42.0
 
 * [Fixed] Fix config spec to allow additionalProperties. See [#13512](https://github.com/DataDog/integrations-core/pull/13512).
 
