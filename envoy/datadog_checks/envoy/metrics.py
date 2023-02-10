@@ -3817,6 +3817,22 @@ METRICS = {
         ),
         'method': 'monotonic_count',
     },
+    'access_logs.grpc_access_log.logs_dropped': { 
+        'tags': (
+            (),
+            (),
+            (),
+        ),
+        'method': 'monotonic_count',
+    },
+    'access_logs.grpc_access_log.logs_written': { 
+        'tags': (
+            (),
+            (),
+            (),
+        ),
+        'method': 'monotonic_count',
+    },
 }
 # fmt: on
 
