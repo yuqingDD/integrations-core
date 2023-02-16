@@ -35,7 +35,8 @@ class KafkaCheck(AgentCheck, ConfigMixin):
         )
         self._consumer_groups = self.instance.get('consumer_groups', {})
         self._broker_requests_batch_size = self.instance.get('broker_requests_batch_size', BROKER_REQUESTS_BATCH_SIZE)
-        self.client = make_client(self, self.config)
+        tls_context = self.get_tls_context()
+        self.client = make_client(self, self.config, tls_context)
 
     def check(self, _):
         """The main entrypoint of the check."""
