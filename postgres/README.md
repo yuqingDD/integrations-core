@@ -414,7 +414,7 @@ See [service_checks.json][18] for a list of service checks provided by this inte
 
 Need help? Contact [Datadog support][21].
 
-### Uninstallation
+## Uninstallation
 
 Test
 
