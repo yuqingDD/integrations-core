@@ -10,7 +10,7 @@ from datadog_checks.dev import docker_run
 from datadog_checks.dev.conditions import CheckDockerLogs
 from datadog_checks.dev.fs import get_here
 from datadog_checks.dev.ssh_tunnel import socks_proxy
-from datadog_checks.dev.terraform import terraform_run
+from datadog_checks.dev.terraform import terraform_run, terraform_refresh
 from datadog_checks.openstack_controller import OpenStackControllerCheck
 
 from .common import CHECK_NAME, CONFIG_FILE_INSTANCE, USE_OPENSTACK_SANDBOX
@@ -19,7 +19,7 @@ from .common import CHECK_NAME, CONFIG_FILE_INSTANCE, USE_OPENSTACK_SANDBOX
 @pytest.fixture(scope='session')
 def dd_environment():
     if USE_OPENSTACK_SANDBOX:
-        with terraform_run(os.path.join(get_here(), 'terraform')) as outputs:
+        with terraform_refresh(os.path.join(get_here(), 'terraform')) as outputs:
             ip = outputs['ip']['value']
             internal_ip = outputs['internal_ip']['value']
             private_key = outputs['ssh_private_key']['value']

@@ -68,6 +68,37 @@ def terraform_run(directory, sleep=None, endpoints=None, conditions=None, env_va
         yield result
 
 
+@contextmanager
+def terraform_refresh(directory, sleep=None, endpoints=None, conditions=None, env_vars=None, wrappers=None):
+    """
+    A convenient context manager for safely refresh Terraform resources.
+
+    - **directory** (_str_) - A path containing Terraform files
+    - **sleep** (_float_) - Number of seconds to wait before yielding. This occurs after all conditions are successful.
+    - **endpoints** (_List[str]_) - Endpoints to verify access for before yielding. Shorthand for adding
+      `CheckEndpoints(endpoints)` to the `conditions` argument.
+    - **conditions** (_callable_) - A list of callable objects that will be executed before yielding to
+      check for errors
+    - **env_vars** (_dict_) - A dictionary to update `os.environ` with during execution
+    - **wrappers** (_List[callable]_) - A list of context managers to use during execution
+    """
+    if not which('terraform'):
+        pytest.skip('Terraform not available')
+
+    set_up = TerraformRefresh(directory)
+
+    with environment_run(
+        up=set_up,
+        sleep=sleep,
+        endpoints=endpoints,
+        conditions=conditions,
+        env_vars=env_vars,
+        wrappers=wrappers,
+    ) as result:
+        yield result
+
+
+
 class TerraformUp(LazyFunction):
     """Create the terraform environment, calling `init` and `apply`.
 
@@ -112,3 +143,18 @@ class TerraformDown(LazyFunction):
                 env = construct_env_vars()
                 env['TF_VAR_user'] = getpass.getuser()
                 run_command(['terraform', 'destroy', '-auto-approve', '-no-color'], check=True, env=env)
+
+
+class TerraformRefresh(LazyFunction):
+    """Refresh the terraform resources, calling `apply -refresh-only`."""
+
+    def __init__(self, directory):
+        self.directory = directory
+
+    def __call__(self):
+        with TempDir('terraform') as temp_dir:
+            terraform_dir = os.path.join(temp_dir, 'terraform')
+            with chdir(terraform_dir):
+                env = construct_env_vars()
+                env['TF_VAR_user'] = getpass.getuser()
+                run_command(['terraform', 'apply', '-refresh-only', '-auto-approve', '-no-color'], check=True, env=env)
