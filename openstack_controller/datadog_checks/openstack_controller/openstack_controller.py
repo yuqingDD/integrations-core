@@ -127,10 +127,35 @@ class OpenStackControllerCheck(AgentCheck):
         # }
         self.servers_cache = {}
 
-        # Current instance name
-        self.instance_name = None
         # Mapping of Nova-managed servers to tags for current instance name
         self.external_host_tags = {}
+
+        self.external_host_tags = {}
+        self.instance_name = self.instance.get('name')
+        if not self.instance_name:
+            # We need a instance_name to identify this instance
+            raise IncompleteConfig("Missing name")
+
+        self.network_ids = self.instance.get('network_ids', [])
+        self.exclude_network_id_patterns = set(self.instance.get('exclude_network_ids', []))
+        self.exclude_network_id_rules = [re.compile(ex) for ex in self.exclude_network_id_patterns]
+        self.exclude_server_id_patterns = set(self.instance.get('exclude_server_ids', []))
+        self.exclude_server_id_rules = [re.compile(ex) for ex in self.exclude_server_id_patterns]
+        self.include_project_name_patterns = set(self.instance.get('whitelist_project_names', []))
+        self.include_project_name_rules = [re.compile(ex) for ex in self.include_project_name_patterns]
+        self.exclude_project_name_patterns = set(self.instance.get('blacklist_project_names', []))
+        self.exclude_project_name_rules = [re.compile(ex) for ex in self.exclude_project_name_patterns]
+
+        self.custom_tags = self.instance.get("tags", [])
+        self.collect_project_metrics = is_affirmative(self.instance.get('collect_project_metrics', True))
+        self.collect_hypervisor_metrics = is_affirmative(self.instance.get('collect_hypervisor_metrics', True))
+        self.collect_hypervisor_load = is_affirmative(self.instance.get('collect_hypervisor_load', True))
+        self.collect_network_metrics = is_affirmative(self.instance.get('collect_network_metrics', True))
+        self.collect_server_diagnostic_metrics = is_affirmative(
+            self.instance.get('collect_server_diagnostic_metrics', True)
+        )
+        self.collect_server_flavor_metrics = is_affirmative(self.instance.get('collect_server_flavor_metrics', True))
+        self.use_shortname = is_affirmative(self.instance.get('use_shortname', False))
 
     def delete_api_cache(self):
         self._api = None
@@ -661,47 +686,22 @@ class OpenStackControllerCheck(AgentCheck):
             raise IncompleteConfig("Could not initialise Openstack API")
 
     def check(self, instance):
-        # Initialize global variable that are per instances
-        self.external_host_tags = {}
-        self.instance_name = instance.get('name')
-        if not self.instance_name:
-            # We need a instance_name to identify this instance
-            raise IncompleteConfig("Missing name")
 
         # have we been backed off
         if not self._backoff.should_run():
             self.log.info('Skipping run due to exponential backoff in effect')
             return
 
-        network_ids = instance.get('network_ids', [])
-        exclude_network_id_patterns = set(instance.get('exclude_network_ids', []))
-        exclude_network_id_rules = [re.compile(ex) for ex in exclude_network_id_patterns]
-        exclude_server_id_patterns = set(instance.get('exclude_server_ids', []))
-        exclude_server_id_rules = [re.compile(ex) for ex in exclude_server_id_patterns]
-        include_project_name_patterns = set(instance.get('whitelist_project_names', []))
-        include_project_name_rules = [re.compile(ex) for ex in include_project_name_patterns]
-        exclude_project_name_patterns = set(instance.get('blacklist_project_names', []))
-        exclude_project_name_rules = [re.compile(ex) for ex in exclude_project_name_patterns]
-
-        custom_tags = instance.get("tags", [])
-        collect_project_metrics = is_affirmative(instance.get('collect_project_metrics', True))
-        collect_hypervisor_metrics = is_affirmative(instance.get('collect_hypervisor_metrics', True))
-        collect_hypervisor_load = is_affirmative(instance.get('collect_hypervisor_load', True))
-        collect_network_metrics = is_affirmative(instance.get('collect_network_metrics', True))
-        collect_server_diagnostic_metrics = is_affirmative(instance.get('collect_server_diagnostic_metrics', True))
-        collect_server_flavor_metrics = is_affirmative(instance.get('collect_server_flavor_metrics', True))
-        use_shortname = is_affirmative(instance.get('use_shortname', False))
-
         try:
             # Authenticate and add the instance api to apis cache
             keystone_server_url = self._get_keystone_server_url(instance)
-            self.init_api(instance, keystone_server_url, custom_tags)
+            self.init_api(instance, keystone_server_url, self.custom_tags)
             if self._api is None:
                 self.log.info("Not api found, make sure you admin user has access to your OpenStack projects: \n")
                 return
 
             self.log.debug("Running check with credentials: \n")
-            self._send_api_service_checks(keystone_server_url, custom_tags)
+            self._send_api_service_checks(keystone_server_url, self.custom_tags)
             # Artificial metric introduced to distinguish between old and new openstack integrations
             self.gauge("openstack.controller", 1)
 
@@ -709,28 +709,30 @@ class OpenStackControllerCheck(AgentCheck):
             # TODO: NOTE: During authentication we use /v3/auth/projects and here we use /v3/projects.
             # TODO: These api don't seems to return the same thing however the latter contains the former.
             # TODO: Is this expected or could we just have one call with proper config?
-            projects = self.get_projects(include_project_name_rules, exclude_project_name_rules)
+            projects = self.get_projects(self.include_project_name_rules, self.exclude_project_name_rules)
 
-            if collect_project_metrics:
+            if self.collect_project_metrics:
                 for project in itervalues(projects):
-                    self.collect_project_limit(project, custom_tags)
+                    self.collect_project_limit(project, self.custom_tags)
 
-            servers = self.populate_servers_cache(projects, exclude_server_id_rules)
+            servers = self.populate_servers_cache(projects, self.exclude_server_id_rules)
 
             self.collect_hypervisors_metrics(
                 servers,
-                custom_tags=custom_tags,
-                use_shortname=use_shortname,
-                collect_hypervisor_metrics=collect_hypervisor_metrics,
-                collect_hypervisor_load=collect_hypervisor_load,
+                custom_tags=self.custom_tags,
+                use_shortname=self.use_shortname,
+                collect_hypervisor_metrics=self.collect_hypervisor_metrics,
+                collect_hypervisor_load=self.collect_hypervisor_load,
             )
 
-            if collect_server_diagnostic_metrics or collect_server_flavor_metrics:
-                if collect_server_diagnostic_metrics:
+            if self.collect_server_diagnostic_metrics or self.collect_server_flavor_metrics:
+                if self.collect_server_diagnostic_metrics:
                     self.log.debug("Fetch stats from %s server(s)", len(servers))
                     for server in itervalues(servers):
-                        self.collect_server_diagnostic_metrics(server, tags=custom_tags, use_shortname=use_shortname)
-                if collect_server_flavor_metrics:
+                        self.collect_server_diagnostic_metrics(
+                            server, tags=self.custom_tags, use_shortname=self.use_shortname
+                        )
+                if self.collect_server_flavor_metrics:
                     if len(servers) >= 1 and 'flavor_id' in next(itervalues(servers)):
                         self.log.debug("Fetch server flavors")
                         # If flavors are not part of servers detail (new in version 2.47) then we need to fetch them
@@ -739,11 +741,11 @@ class OpenStackControllerCheck(AgentCheck):
                         flavors = None
                     for server in itervalues(servers):
                         self.collect_server_flavor_metrics(
-                            server, flavors, tags=custom_tags, use_shortname=use_shortname
+                            server, flavors, tags=self.custom_tags, use_shortname=self.use_shortname
                         )
 
-            if collect_network_metrics:
-                self.collect_networks_metrics(custom_tags, network_ids, exclude_network_id_rules)
+            if self.collect_network_metrics:
+                self.collect_networks_metrics(self.custom_tags, self.network_ids, self.exclude_network_id_rules)
 
             self.set_external_tags(self.get_external_host_tags())
 
@@ -765,7 +767,7 @@ class OpenStackControllerCheck(AgentCheck):
                 self.warning("Error reaching nova API: %s", e)
             else:
                 # exponential backoff
-                self.do_backoff(custom_tags)
+                self.do_backoff(self.custom_tags)
                 return
 
         self._backoff.reset_backoff()
