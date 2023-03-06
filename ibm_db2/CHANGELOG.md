@@ -1,5 +1,9 @@
 # CHANGELOG - IBM Db2
 
+## 1.11.3 / 2023-03-06 / Agent 7.44.0
+
+* [Added] Add the ability to pass additional connection parametters. See [#14110](https://github.com/DataDog/integrations-core/pull/14110)
+
 ## 1.11.2 / 2022-09-22 / Agent 7.40.0
 
 * [Fixed] Emit critical service check when connection is lost. See [#12995](https://github.com/DataDog/integrations-core/pull/12995).
