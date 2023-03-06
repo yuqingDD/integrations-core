@@ -30,6 +30,10 @@ def instance_empty_default_hostname(field, value):
     return False
 
 
+def instance_extra_connection_parametters(field, value):
+    return get_default_field_value(field, value)
+
+
 def instance_host(field, value):
     return get_default_field_value(field, value)
 
