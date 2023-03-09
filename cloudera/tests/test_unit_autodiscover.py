@@ -2,8 +2,6 @@
 # All rights reserved
 # Licensed under a 3-clause BSD style license (see LICENSE)
 
-import random
-import string
 from contextlib import contextmanager
 from contextlib import nullcontext as does_not_raise
 
@@ -367,7 +365,7 @@ def test_autodiscover_hosts_with_zero_hosts(aggregator, dd_run_check, cloudera_c
 
 
 @pytest.mark.parametrize(
-    'instance, dd_run_check_count, read_clusters, list_hosts, expected_can_connects, expected_host_healths, '
+    'instance, dd_run_check_count, list_hosts, expected_can_connects, expected_host_healths, '
     'expected_metrics, list_hosts_call_count',
     [
         (
@@ -386,9 +384,6 @@ def test_autodiscover_hosts_with_zero_hosts(aggregator, dd_run_check, cloudera_c
                 },
             },
             1,
-            [
-                {'name': 'cluster_0', 'entity_status': 'GOOD_HEALTH'},
-            ],
             [
                 make_host(name='host_0', entity_status='BAD_HEALTH'),
                 make_host(name='host_new_0', entity_status='BAD_HEALTH'),
@@ -461,9 +456,6 @@ def test_autodiscover_hosts_with_zero_hosts(aggregator, dd_run_check, cloudera_c
                 },
             },
             1,
-            [
-                {'name': 'cluster_0', 'entity_status': 'GOOD_HEALTH'},
-            ],
             [make_host(name=f'host_{n}') for n in range(10)],
             [
                 {
@@ -641,9 +633,6 @@ def test_autodiscover_hosts_with_zero_hosts(aggregator, dd_run_check, cloudera_c
             },
             1,
             [
-                {'name': 'cluster_0', 'entity_status': 'GOOD_HEALTH'},
-            ],
-            [
                 make_host(name='host_0'),
                 make_host(name='tmp_0'),
             ],
@@ -707,9 +696,6 @@ def test_autodiscover_hosts_with_zero_hosts(aggregator, dd_run_check, cloudera_c
             },
             1,
             [
-                {'name': 'cluster_0', 'entity_status': 'GOOD_HEALTH'},
-            ],
-            [
                 make_host(name='host_0'),
                 make_host(name='tmp_0'),
             ],
@@ -771,9 +757,6 @@ def test_autodiscover_hosts_with_zero_hosts(aggregator, dd_run_check, cloudera_c
                 },
             },
             2,
-            [
-                {'name': 'cluster_0', 'entity_status': 'GOOD_HEALTH'},
-            ],
             [make_host(name='host_0', entity_status='BAD_HEALTH')],
             [
                 {
@@ -821,9 +804,6 @@ def test_autodiscover_hosts_with_zero_hosts(aggregator, dd_run_check, cloudera_c
             },
             2,
             [
-                {'name': 'cluster_0', 'entity_status': 'GOOD_HEALTH'},
-            ],
-            [
                 make_host(entity_status='BAD_HEALTH'),
             ],
             [
@@ -870,17 +850,13 @@ def test_autodiscover_hosts(
     cloudera_check,
     instance,
     dd_run_check_count,
-    read_clusters,
     list_hosts,
     expected_can_connects,
     expected_host_healths,
     expected_metrics,
     list_hosts_call_count,
 ):
-    with patch_cm_client(
-        read_clusters=read_clusters,
-        list_hosts=list_hosts,
-    ) as mock_client:
+    with patch_cm_client(list_hosts=list_hosts) as mock_client:
         check = cloudera_check(instance)
         for _ in range(dd_run_check_count):
             dd_run_check(check)
