@@ -365,8 +365,7 @@ def test_autodiscover_hosts_with_zero_hosts(aggregator, dd_run_check, cloudera_c
 
 
 @pytest.mark.parametrize(
-    'instance, dd_run_check_count, list_hosts, expected_can_connects, expected_host_healths, '
-    'expected_metrics, list_hosts_call_count',
+    'instance, dd_run_check_count, list_hosts, expected_host_healths, ' 'expected_metrics, list_hosts_call_count',
     [
         (
             {
@@ -387,13 +386,6 @@ def test_autodiscover_hosts_with_zero_hosts(aggregator, dd_run_check, cloudera_c
             [
                 make_host(name='host_0', entity_status='BAD_HEALTH'),
                 make_host(name='host_new_0', entity_status='BAD_HEALTH'),
-            ],
-            [
-                {
-                    'count': 1,
-                    'status': ServiceCheck.OK,
-                    'tags': ['api_url:http://localhost:8080/api/v48/'],
-                }
             ],
             [
                 {
@@ -457,13 +449,6 @@ def test_autodiscover_hosts_with_zero_hosts(aggregator, dd_run_check, cloudera_c
             },
             1,
             [make_host(name=f'host_{n}') for n in range(10)],
-            [
-                {
-                    'count': 1,
-                    'status': ServiceCheck.OK,
-                    'tags': ['api_url:http://localhost:8080/api/v48/'],
-                }
-            ],
             [
                 {
                     'count': 1,
@@ -640,13 +625,6 @@ def test_autodiscover_hosts_with_zero_hosts(aggregator, dd_run_check, cloudera_c
                 {
                     'count': 1,
                     'status': ServiceCheck.OK,
-                    'tags': ['api_url:http://localhost:8080/api/v48/'],
-                }
-            ],
-            [
-                {
-                    'count': 1,
-                    'status': ServiceCheck.OK,
                     'tags': ['cloudera_cluster:cluster_0', 'cloudera_hostname:host_0', 'cloudera_rack_id:rack_id_0'],
                 },
                 {
@@ -703,13 +681,6 @@ def test_autodiscover_hosts_with_zero_hosts(aggregator, dd_run_check, cloudera_c
                 {
                     'count': 1,
                     'status': ServiceCheck.OK,
-                    'tags': ['api_url:http://localhost:8080/api/v48/'],
-                }
-            ],
-            [
-                {
-                    'count': 1,
-                    'status': ServiceCheck.OK,
                     'tags': ['cloudera_cluster:cluster_0', 'cloudera_hostname:host_0', 'cloudera_rack_id:rack_id_0'],
                 },
                 {
@@ -761,13 +732,6 @@ def test_autodiscover_hosts_with_zero_hosts(aggregator, dd_run_check, cloudera_c
             [
                 {
                     'count': 2,
-                    'status': ServiceCheck.OK,
-                    'tags': ['api_url:http://localhost:8080/api/v48/'],
-                }
-            ],
-            [
-                {
-                    'count': 2,
                     'status': ServiceCheck.CRITICAL,
                     'tags': ['cloudera_cluster:cluster_0', 'cloudera_hostname:host_0', 'cloudera_rack_id:rack_id_0'],
                 },
@@ -809,13 +773,6 @@ def test_autodiscover_hosts_with_zero_hosts(aggregator, dd_run_check, cloudera_c
             [
                 {
                     'count': 2,
-                    'status': ServiceCheck.OK,
-                    'tags': ['api_url:http://localhost:8080/api/v48/'],
-                }
-            ],
-            [
-                {
-                    'count': 2,
                     'status': ServiceCheck.CRITICAL,
                     'tags': ['cloudera_cluster:cluster_0', 'cloudera_hostname:host_0', 'cloudera_rack_id:rack_id_0'],
                 },
@@ -851,7 +808,6 @@ def test_autodiscover_hosts(
     instance,
     dd_run_check_count,
     list_hosts,
-    expected_can_connects,
     expected_host_healths,
     expected_metrics,
     list_hosts_call_count,
@@ -860,14 +816,13 @@ def test_autodiscover_hosts(
         check = cloudera_check(instance)
         for _ in range(dd_run_check_count):
             dd_run_check(check)
-        for expected_can_connect in expected_can_connects:
-            aggregator.assert_service_check(
-                'cloudera.can_connect',
-                count=expected_can_connect.get('count'),
-                status=expected_can_connect.get('status'),
-                message=expected_can_connect.get('message'),
-                tags=expected_can_connect.get('tags'),
-            )
+
+        aggregator.assert_service_check(
+            'cloudera.can_connect',
+            count=dd_run_check_count,
+            status=ServiceCheck.OK,
+            tags=['api_url:http://localhost:8080/api/v48/'],
+        )
         for expected_host_health in expected_host_healths:
             aggregator.assert_service_check(
                 'cloudera.host.health',
