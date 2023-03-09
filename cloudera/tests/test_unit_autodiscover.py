@@ -444,107 +444,32 @@ def test_autodiscover_hosts_with_zero_hosts(aggregator, dd_run_check, cloudera_c
                 }
                 for n in range(5, 10)
             ],
+            # Similarly we expect to only get metrics from the first 5 hosts
             [
                 {
                     'count': 1,
-                    'tags': ['cloudera_cluster:cluster_0', 'cloudera_hostname:host_0', 'cloudera_rack_id:rack_id_0'],
+                    'tags': ['cloudera_cluster:cluster_0', f'cloudera_hostname:host_{n}', 'cloudera_rack_id:rack_id_0'],
                     'ts_tags': [
                         'cloudera_cluster:cluster_0',
-                        'cloudera_hostname:host_0',
+                        f'cloudera_hostname:host_{n}',
                         'cloudera_rack_id:rack_id_0',
-                        'cloudera_host:host_0',
+                        f'cloudera_host:host_{n}',
                     ],
-                },
-                {
-                    'count': 1,
-                    'tags': ['cloudera_cluster:cluster_0', 'cloudera_hostname:host_1', 'cloudera_rack_id:rack_id_0'],
-                    'ts_tags': [
-                        'cloudera_cluster:cluster_0',
-                        'cloudera_hostname:host_1',
-                        'cloudera_rack_id:rack_id_0',
-                        'cloudera_host:host_1',
-                    ],
-                },
-                {
-                    'count': 1,
-                    'tags': ['cloudera_cluster:cluster_0', 'cloudera_hostname:host_2', 'cloudera_rack_id:rack_id_0'],
-                    'ts_tags': [
-                        'cloudera_cluster:cluster_0',
-                        'cloudera_hostname:host_2',
-                        'cloudera_rack_id:rack_id_0',
-                        'cloudera_host:host_2',
-                    ],
-                },
-                {
-                    'count': 1,
-                    'tags': ['cloudera_cluster:cluster_0', 'cloudera_hostname:host_3', 'cloudera_rack_id:rack_id_0'],
-                    'ts_tags': [
-                        'cloudera_cluster:cluster_0',
-                        'cloudera_hostname:host_3',
-                        'cloudera_rack_id:rack_id_0',
-                        'cloudera_host:host_3',
-                    ],
-                },
-                {
-                    'count': 1,
-                    'tags': ['cloudera_cluster:cluster_0', 'cloudera_hostname:host_4', 'cloudera_rack_id:rack_id_0'],
-                    'ts_tags': [
-                        'cloudera_cluster:cluster_0',
-                        'cloudera_hostname:host_4',
-                        'cloudera_rack_id:rack_id_0',
-                        'cloudera_host:host_4',
-                    ],
-                },
+                }
+                for n in range(5)
+            ]
+            + [
                 {
                     'count': 0,
-                    'tags': ['cloudera_cluster:cluster_0', 'cloudera_hostname:host_5', 'cloudera_rack_id:rack_id_0'],
+                    'tags': ['cloudera_cluster:cluster_0', f'cloudera_hostname:host_{n}', 'cloudera_rack_id:rack_id_0'],
                     'ts_tags': [
                         'cloudera_cluster:cluster_0',
-                        'cloudera_hostname:host_5',
+                        f'cloudera_hostname:host_{n}',
                         'cloudera_rack_id:rack_id_0',
-                        'cloudera_host:host_5',
+                        f'cloudera_host:host_{n}',
                     ],
-                },
-                {
-                    'count': 0,
-                    'tags': ['cloudera_cluster:cluster_0', 'cloudera_hostname:host_6', 'cloudera_rack_id:rack_id_0'],
-                    'ts_tags': [
-                        'cloudera_cluster:cluster_0',
-                        'cloudera_hostname:host_6',
-                        'cloudera_rack_id:rack_id_0',
-                        'cloudera_host:host_6',
-                    ],
-                },
-                {
-                    'count': 0,
-                    'tags': ['cloudera_cluster:cluster_0', 'cloudera_hostname:host_7', 'cloudera_rack_id:rack_id_0'],
-                    'ts_tags': [
-                        'cloudera_cluster:cluster_0',
-                        'cloudera_hostname:host_7',
-                        'cloudera_rack_id:rack_id_0',
-                        'cloudera_host:host_7',
-                    ],
-                },
-                {
-                    'count': 0,
-                    'tags': ['cloudera_cluster:cluster_0', 'cloudera_hostname:host_8', 'cloudera_rack_id:rack_id_0'],
-                    'ts_tags': [
-                        'cloudera_cluster:cluster_0',
-                        'cloudera_hostname:host_8',
-                        'cloudera_rack_id:rack_id_0',
-                        'cloudera_host:host_8',
-                    ],
-                },
-                {
-                    'count': 0,
-                    'tags': ['cloudera_cluster:cluster_0', 'cloudera_hostname:host_9', 'cloudera_rack_id:rack_id_0'],
-                    'ts_tags': [
-                        'cloudera_cluster:cluster_0',
-                        'cloudera_hostname:host_9',
-                        'cloudera_rack_id:rack_id_0',
-                        'cloudera_host:host_9',
-                    ],
-                },
+                }
+                for n in range(5, 10)
             ],
             1,
         ),
