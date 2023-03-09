@@ -4,6 +4,7 @@
 
 import random
 import string
+from contextlib import contextmanager
 from contextlib import nullcontext as does_not_raise
 
 import mock
@@ -261,143 +262,65 @@ def test_autodiscover_clusters(
 
 
 @pytest.mark.parametrize(
+    'extra_tags', [pytest.param([], id='no extra tags'), pytest.param(['new_tag'], id='with custom tags')]
+)
+@pytest.mark.parametrize(
+    'include, expected_error_message',
+    [
+        pytest.param(
+            {'^host.*'},
+            'Cloudera check raised an exception: Setting `include` must be an array',
+            id='bad type for include',
+        ),
+        pytest.param(
+            [[]],
+            'Cloudera check raised an exception: `include` entries must be a map or a string',
+            id='bad type for include entry',
+        ),
+    ],
+)
+def test_autodiscover_hosts_with_include_config_errors(
+    aggregator, dd_run_check, cloudera_check, include, expected_error_message, extra_tags
+):
+    instance = {
+        'api_url': 'http://localhost:8080/api/v48/',
+        'clusters': {
+            'include': [
+                {
+                    '^cluster.*': {
+                        'hosts': {
+                            'include': include,
+                        }
+                    }
+                }
+            ]
+        },
+    }
+
+    if extra_tags:
+        instance['tags'] = extra_tags
+
+    with patch_cm_client():
+        check = cloudera_check(instance)
+        dd_run_check(check)
+
+    aggregator.assert_service_check(
+        'cloudera.can_connect',
+        count=1,
+        status=ServiceCheck.CRITICAL,
+        message=expected_error_message,
+        tags=['api_url:http://localhost:8080/api/v48/'] + extra_tags,
+    )
+    # Since this is a config error, we shouldn't report host health related checks
+    aggregator.assert_service_check('cloudera.host.health', count=0)
+    # Likewise, we shouldn't get any metrics
+    assert len([name for name in aggregator.metric_names if name.startswith('cloudera.host.')]) == 0
+
+
+@pytest.mark.parametrize(
     'instance, dd_run_check_count, read_clusters, list_hosts, expected_can_connects, expected_host_healths, '
     'expected_metrics, list_hosts_call_count',
     [
-        (
-            {
-                'api_url': 'http://localhost:8080/api/v48/',
-                'clusters': {
-                    'include': [
-                        {
-                            '^cluster.*': {
-                                'hosts': {
-                                    'include': {
-                                        '^host.*',
-                                    },
-                                }
-                            }
-                        }
-                    ]
-                },
-            },
-            1,
-            [
-                {'name': 'cluster_0', 'entity_status': 'GOOD_HEALTH'},
-            ],
-            [],
-            [
-                {
-                    'count': 1,
-                    'status': ServiceCheck.CRITICAL,
-                    'message': 'Cloudera check raised an exception: Setting `include` must be an array',
-                    'tags': ['api_url:http://localhost:8080/api/v48/'],
-                }
-            ],
-            [{'count': 0}],
-            [{'count': 0}],
-            0,
-        ),
-        (
-            {
-                'api_url': 'http://localhost:8080/api/v48/',
-                'tags': ['new_tag'],
-                'clusters': {
-                    'include': [
-                        {
-                            '^cluster.*': {
-                                'hosts': {
-                                    'include': {
-                                        '^host.*',
-                                    },
-                                }
-                            }
-                        }
-                    ]
-                },
-            },
-            1,
-            [
-                {'name': 'cluster_0', 'entity_status': 'GOOD_HEALTH'},
-            ],
-            [],
-            [
-                {
-                    'count': 1,
-                    'status': ServiceCheck.CRITICAL,
-                    'message': 'Cloudera check raised an exception: Setting `include` must be an array',
-                    'tags': ['api_url:http://localhost:8080/api/v48/', 'new_tag'],
-                }
-            ],
-            [{'count': 0}],
-            [{'count': 0}],
-            0,
-        ),
-        (
-            {
-                'api_url': 'http://localhost:8080/api/v48/',
-                'clusters': {
-                    'include': [
-                        {
-                            '^cluster.*': {
-                                'hosts': {
-                                    'include': [[]],
-                                }
-                            }
-                        }
-                    ]
-                },
-            },
-            1,
-            [
-                {'name': 'cluster_0', 'entity_status': 'GOOD_HEALTH'},
-            ],
-            [],
-            [
-                {
-                    'count': 1,
-                    'status': ServiceCheck.CRITICAL,
-                    'message': 'Cloudera check raised an exception: `include` entries must be a map or a string',
-                    'tags': ['api_url:http://localhost:8080/api/v48/'],
-                }
-            ],
-            [{'count': 0}],
-            [{'count': 0}],
-            0,
-        ),
-        (
-            {
-                'api_url': 'http://localhost:8080/api/v48/',
-                'tags': ['new_tag'],
-                'clusters': {
-                    'include': [
-                        {
-                            '^cluster.*': {
-                                'hosts': {
-                                    'include': [[]],
-                                }
-                            }
-                        }
-                    ]
-                },
-            },
-            1,
-            [
-                {'name': 'cluster_0', 'entity_status': 'GOOD_HEALTH'},
-            ],
-            [],
-            [
-                {
-                    'count': 1,
-                    'status': ServiceCheck.CRITICAL,
-                    'message': 'Cloudera check raised an exception: `include` entries must be a map or a string',
-                    'tags': ['api_url:http://localhost:8080/api/v48/', 'new_tag'],
-                }
-            ],
-            [{'count': 0}],
-            [{'count': 0}],
-            0,
-        ),
         (
             {
                 'api_url': 'http://localhost:8080/api/v48/',
@@ -1090,10 +1013,6 @@ def test_autodiscover_clusters(
         ),
     ],
     ids=[
-        'exception include type',
-        'exception include type with custom tags',
-        'exception include entry type',
-        'exception include entry type with custom tags',
         'configured host autodiscover with zero hosts',
         'configured host autodiscover with two different prefix hosts',
         'configured host autodiscover with ten clusters and limit',
@@ -1116,22 +1035,10 @@ def test_autodiscover_hosts(
     expected_metrics,
     list_hosts_call_count,
 ):
-    with mock.patch(
-        'datadog_checks.cloudera.client.cm_client.CmClient.get_version',
-        return_value=Version('7.0.0'),
-    ), mock.patch(
-        'datadog_checks.cloudera.client.cm_client.CmClient.read_clusters',
-        return_value=read_clusters,
-    ), mock.patch(
-        'datadog_checks.cloudera.client.cm_client.CmClient.query_time_series',
-        side_effect=query_time_series,
-    ), mock.patch(
-        'datadog_checks.cloudera.client.cm_client.CmClient.list_hosts',
-        return_value=list_hosts,
-    ) as mocked_list_hosts, mock.patch(
-        'datadog_checks.cloudera.client.cm_client.CmClient.read_events',
-        return_value=[],
-    ):
+    with patch_cm_client(
+        read_clusters=read_clusters,
+        list_hosts=list_hosts,
+    ) as mock_client:
         check = cloudera_check(instance)
         for _ in range(dd_run_check_count):
             dd_run_check(check)
@@ -1160,4 +1067,27 @@ def test_autodiscover_hosts(
                 aggregator.assert_metric(
                     f'cloudera.host.{metric}', count=expected_metric.get('count'), tags=expected_metric.get('ts_tags')
                 )
-        assert mocked_list_hosts.call_count == list_hosts_call_count
+        assert mock_client.list_hosts.call_count == list_hosts_call_count
+
+
+@contextmanager
+def patch_cm_client(*, read_clusters=None, list_hosts=None):
+    """Patch CMClient with default return values with some customization"""
+    if read_clusters is None:
+        read_clusters = [
+            {'name': 'cluster_0', 'entity_status': 'GOOD_HEALTH'},
+        ]
+    if list_hosts is None:
+        list_hosts = []
+
+    with mock.patch(
+        'datadog_checks.cloudera.client.factory.CmClient',
+        autospec=True,
+    ) as MockClient:
+        mock_client = MockClient.return_value
+        mock_client.get_version.return_value = Version('7.0.0')
+        mock_client.read_clusters.return_value = read_clusters
+        mock_client.query_time_series.side_effect = query_time_series
+        mock_client.list_hosts.return_value = list_hosts
+
+        yield mock_client
