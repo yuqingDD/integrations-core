@@ -365,22 +365,11 @@ def test_autodiscover_hosts_with_zero_hosts(aggregator, dd_run_check, cloudera_c
 
 
 @pytest.mark.parametrize(
-    'instance, dd_run_check_count, list_hosts, expected_host_healths, ' 'expected_metrics, list_hosts_call_count',
+    'hosts_conf, dd_run_check_count, list_hosts, expected_host_healths, expected_metrics, list_hosts_call_count',
     [
         (
             {
-                'api_url': 'http://localhost:8080/api/v48/',
-                'clusters': {
-                    'include': [
-                        {
-                            '^cluster.*': {
-                                'hosts': {
-                                    'include': ['^host.*'],
-                                }
-                            }
-                        }
-                    ]
-                },
+                'include': ['^host.*'],
             },
             1,
             [
@@ -433,68 +422,27 @@ def test_autodiscover_hosts_with_zero_hosts(aggregator, dd_run_check, cloudera_c
         ),
         (
             {
-                'api_url': 'http://localhost:8080/api/v48/',
-                'clusters': {
-                    'include': [
-                        {
-                            '^cluster.*': {
-                                'hosts': {
-                                    'limit': 5,
-                                    'include': ['^host.*'],
-                                }
-                            }
-                        }
-                    ]
-                },
+                'limit': 5,
+                'include': ['^host.*'],
             },
             1,
             [make_host(name=f'host_{n}') for n in range(10)],
             [
+                # The first 5 hosts report service checks
                 {
                     'count': 1,
                     'status': ServiceCheck.OK,
-                    'tags': ['cloudera_cluster:cluster_0', 'cloudera_hostname:host_0', 'cloudera_rack_id:rack_id_0'],
-                },
-                {
-                    'count': 1,
-                    'status': ServiceCheck.OK,
-                    'tags': ['cloudera_cluster:cluster_0', 'cloudera_hostname:host_1', 'cloudera_rack_id:rack_id_0'],
-                },
-                {
-                    'count': 1,
-                    'status': ServiceCheck.OK,
-                    'tags': ['cloudera_cluster:cluster_0', 'cloudera_hostname:host_2', 'cloudera_rack_id:rack_id_0'],
-                },
-                {
-                    'count': 1,
-                    'status': ServiceCheck.OK,
-                    'tags': ['cloudera_cluster:cluster_0', 'cloudera_hostname:host_3', 'cloudera_rack_id:rack_id_0'],
-                },
-                {
-                    'count': 1,
-                    'status': ServiceCheck.OK,
-                    'tags': ['cloudera_cluster:cluster_0', 'cloudera_hostname:host_4', 'cloudera_rack_id:rack_id_0'],
-                },
+                    'tags': ['cloudera_cluster:cluster_0', f'cloudera_hostname:host_{n}', 'cloudera_rack_id:rack_id_0'],
+                }
+                for n in range(5)
+            ]
+            + [
+                # And the rest do not (due to the limit in the config)
                 {
                     'count': 0,
-                    'tags': ['cloudera_cluster:cluster_0', 'cloudera_hostname:host_5', 'cloudera_rack_id:rack_id_0'],
-                },
-                {
-                    'count': 0,
-                    'tags': ['cloudera_cluster:cluster_0', 'cloudera_hostname:host_6', 'cloudera_rack_id:rack_id_0'],
-                },
-                {
-                    'count': 0,
-                    'tags': ['cloudera_cluster:cluster_0', 'cloudera_hostname:host_7', 'cloudera_rack_id:rack_id_0'],
-                },
-                {
-                    'count': 0,
-                    'tags': ['cloudera_cluster:cluster_0', 'cloudera_hostname:host_8', 'cloudera_rack_id:rack_id_0'],
-                },
-                {
-                    'count': 0,
-                    'tags': ['cloudera_cluster:cluster_0', 'cloudera_hostname:host_9', 'cloudera_rack_id:rack_id_0'],
-                },
+                    'tags': ['cloudera_cluster:cluster_0', f'cloudera_hostname:host_{n}', 'cloudera_rack_id:rack_id_0'],
+                }
+                for n in range(5, 10)
             ],
             [
                 {
@@ -602,19 +550,8 @@ def test_autodiscover_hosts_with_zero_hosts(aggregator, dd_run_check, cloudera_c
         ),
         (
             {
-                'api_url': 'http://localhost:8080/api/v48/',
-                'clusters': {
-                    'include': [
-                        {
-                            '^cluster.*': {
-                                'hosts': {
-                                    'include': ['.*'],
-                                    'exclude': ['^tmp_.*'],
-                                }
-                            }
-                        }
-                    ]
-                },
+                'include': ['.*'],
+                'exclude': ['^tmp_.*'],
             },
             1,
             [
@@ -658,19 +595,8 @@ def test_autodiscover_hosts_with_zero_hosts(aggregator, dd_run_check, cloudera_c
         ),
         (
             {
-                'api_url': 'http://localhost:8080/api/v48/',
-                'clusters': {
-                    'include': [
-                        {
-                            '^cluster.*': {
-                                'hosts': {
-                                    'include': [{'.*': {}}],
-                                    'exclude': ['^tmp_.*'],
-                                }
-                            }
-                        }
-                    ]
-                },
+                'include': [{'.*': {}}],
+                'exclude': ['^tmp_.*'],
             },
             1,
             [
@@ -714,18 +640,7 @@ def test_autodiscover_hosts_with_zero_hosts(aggregator, dd_run_check, cloudera_c
         ),
         (
             {
-                'api_url': 'http://localhost:8080/api/v48/',
-                'clusters': {
-                    'include': [
-                        {
-                            '^cluster.*': {
-                                'hosts': {
-                                    'include': ['^host.*'],
-                                }
-                            }
-                        }
-                    ]
-                },
+                'include': ['^host.*'],
             },
             2,
             [make_host(name='host_0', entity_status='BAD_HEALTH')],
@@ -752,19 +667,8 @@ def test_autodiscover_hosts_with_zero_hosts(aggregator, dd_run_check, cloudera_c
         ),
         (
             {
-                'api_url': 'http://localhost:8080/api/v48/',
-                'clusters': {
-                    'include': [
-                        {
-                            '^cluster.*': {
-                                'hosts': {
-                                    'interval': 60,
-                                    'include': ['^host.*'],
-                                }
-                            }
-                        }
-                    ]
-                },
+                'interval': 60,
+                'include': ['^host.*'],
             },
             2,
             [
@@ -805,13 +709,27 @@ def test_autodiscover_hosts(
     aggregator,
     dd_run_check,
     cloudera_check,
-    instance,
+    hosts_conf,
     dd_run_check_count,
     list_hosts,
     expected_host_healths,
     expected_metrics,
     list_hosts_call_count,
 ):
+
+    instance = {
+        'api_url': 'http://localhost:8080/api/v48/',
+        'clusters': {
+            'include': [
+                {
+                    '^cluster.*': {
+                        'hosts': hosts_conf,
+                    }
+                }
+            ]
+        },
+    }
+
     with patch_cm_client(list_hosts=list_hosts) as mock_client:
         check = cloudera_check(instance)
         for _ in range(dd_run_check_count):
