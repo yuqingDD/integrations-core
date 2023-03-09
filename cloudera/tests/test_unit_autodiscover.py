@@ -18,6 +18,22 @@ from datadog_checks.cloudera.metrics import NATIVE_METRICS, TIMESERIES_METRICS
 pytestmark = [pytest.mark.unit]
 
 
+def make_host(**overrides):
+    host = {
+        'host_id': 'ABCDEFG01',
+        'name': 'host_0',
+        'entity_status': 'GOOD_HEALTH',
+        'num_cores': 8,
+        'num_physical_cores': 8,
+        'total_phys_mem_bytes': 33079799808,
+        'rack_id': 'rack_id_0',
+        'tags': [],
+    }
+
+    host.update(overrides)
+    return host
+
+
 @pytest.mark.parametrize(
     'instance, read_clusters, expected_exception, expected_can_connects, expected_cluster_healths, expected_metrics',
     [
@@ -313,7 +329,40 @@ def test_autodiscover_hosts_with_include_config_errors(
     )
     # Since this is a config error, we shouldn't report host health related checks
     aggregator.assert_service_check('cloudera.host.health', count=0)
-    # Likewise, we shouldn't get any metrics
+    # Likewise, we shouldn't get any host-related metrics
+    assert len([name for name in aggregator.metric_names if name.startswith('cloudera.host.')]) == 0
+
+
+def test_autodiscover_hosts_with_zero_hosts(aggregator, dd_run_check, cloudera_check):
+    instance = {
+        'api_url': 'http://localhost:8080/api/v48/',
+        'clusters': {
+            'include': [
+                {
+                    '^cluster.*': {
+                        'hosts': {
+                            'include': ['^host.*'],
+                        }
+                    }
+                }
+            ]
+        },
+    }
+
+    with patch_cm_client() as mock_client:
+        check = cloudera_check(instance)
+        dd_run_check(check)
+
+    assert mock_client.list_hosts.call_count == 1
+
+    aggregator.assert_service_check(
+        'cloudera.can_connect',
+        count=1,
+        status=ServiceCheck.OK,
+        tags=['api_url:http://localhost:8080/api/v48/'],
+    )
+
+    # We shouldn't get any host-related metrics as there are no hosts
     assert len([name for name in aggregator.metric_names if name.startswith('cloudera.host.')]) == 0
 
 
@@ -340,58 +389,9 @@ def test_autodiscover_hosts_with_include_config_errors(
             [
                 {'name': 'cluster_0', 'entity_status': 'GOOD_HEALTH'},
             ],
-            [],
             [
-                {
-                    'count': 1,
-                    'status': ServiceCheck.OK,
-                    'tags': ['api_url:http://localhost:8080/api/v48/'],
-                }
-            ],
-            [{'count': 0}],
-            [{'count': 0}],
-            1,
-        ),
-        (
-            {
-                'api_url': 'http://localhost:8080/api/v48/',
-                'clusters': {
-                    'include': [
-                        {
-                            '^cluster.*': {
-                                'hosts': {
-                                    'include': ['^host.*'],
-                                }
-                            }
-                        }
-                    ]
-                },
-            },
-            1,
-            [
-                {'name': 'cluster_0', 'entity_status': 'GOOD_HEALTH'},
-            ],
-            [
-                {
-                    'host_id': ''.join(random.choices(string.ascii_uppercase + string.digits, k=8)),
-                    'name': 'host_0',
-                    'entity_status': 'BAD_HEALTH',
-                    'num_cores': 8,
-                    'num_physical_cores': 8,
-                    'total_phys_mem_bytes': 33079799808,
-                    'rack_id': 'rack_id_0',
-                    'tags': [],
-                },
-                {
-                    'host_id': ''.join(random.choices(string.ascii_uppercase + string.digits, k=8)),
-                    'name': 'host_new_0',
-                    'entity_status': 'BAD_HEALTH',
-                    'num_cores': 8,
-                    'num_physical_cores': 8,
-                    'total_phys_mem_bytes': 33079799808,
-                    'rack_id': 'rack_id_0',
-                    'tags': [],
-                },
+                make_host(name='host_0', entity_status='BAD_HEALTH'),
+                make_host(name='host_new_0', entity_status='BAD_HEALTH'),
             ],
             [
                 {
@@ -464,108 +464,7 @@ def test_autodiscover_hosts_with_include_config_errors(
             [
                 {'name': 'cluster_0', 'entity_status': 'GOOD_HEALTH'},
             ],
-            [
-                {
-                    'host_id': ''.join(random.choices(string.ascii_uppercase + string.digits, k=8)),
-                    'name': 'host_0',
-                    'entity_status': 'GOOD_HEALTH',
-                    'num_cores': 8,
-                    'num_physical_cores': 8,
-                    'total_phys_mem_bytes': 33079799808,
-                    'rack_id': 'rack_id_0',
-                    'tags': [],
-                },
-                {
-                    'host_id': ''.join(random.choices(string.ascii_uppercase + string.digits, k=8)),
-                    'name': 'host_1',
-                    'entity_status': 'GOOD_HEALTH',
-                    'num_cores': 8,
-                    'num_physical_cores': 8,
-                    'total_phys_mem_bytes': 33079799808,
-                    'rack_id': 'rack_id_0',
-                    'tags': [],
-                },
-                {
-                    'host_id': ''.join(random.choices(string.ascii_uppercase + string.digits, k=8)),
-                    'name': 'host_2',
-                    'entity_status': 'GOOD_HEALTH',
-                    'num_cores': 8,
-                    'num_physical_cores': 8,
-                    'total_phys_mem_bytes': 33079799808,
-                    'rack_id': 'rack_id_0',
-                    'tags': [],
-                },
-                {
-                    'host_id': ''.join(random.choices(string.ascii_uppercase + string.digits, k=8)),
-                    'name': 'host_3',
-                    'entity_status': 'GOOD_HEALTH',
-                    'num_cores': 8,
-                    'num_physical_cores': 8,
-                    'total_phys_mem_bytes': 33079799808,
-                    'rack_id': 'rack_id_0',
-                    'tags': [],
-                },
-                {
-                    'host_id': ''.join(random.choices(string.ascii_uppercase + string.digits, k=8)),
-                    'name': 'host_4',
-                    'entity_status': 'GOOD_HEALTH',
-                    'num_cores': 8,
-                    'num_physical_cores': 8,
-                    'total_phys_mem_bytes': 33079799808,
-                    'rack_id': 'rack_id_0',
-                    'tags': [],
-                },
-                {
-                    'host_id': ''.join(random.choices(string.ascii_uppercase + string.digits, k=8)),
-                    'name': 'host_5',
-                    'entity_status': 'GOOD_HEALTH',
-                    'num_cores': 8,
-                    'num_physical_cores': 8,
-                    'total_phys_mem_bytes': 33079799808,
-                    'rack_id': 'rack_id_0',
-                    'tags': [],
-                },
-                {
-                    'host_id': ''.join(random.choices(string.ascii_uppercase + string.digits, k=8)),
-                    'name': 'host_6',
-                    'entity_status': 'GOOD_HEALTH',
-                    'num_cores': 8,
-                    'num_physical_cores': 8,
-                    'total_phys_mem_bytes': 33079799808,
-                    'rack_id': 'rack_id_0',
-                    'tags': [],
-                },
-                {
-                    'host_id': ''.join(random.choices(string.ascii_uppercase + string.digits, k=8)),
-                    'name': 'host_7',
-                    'entity_status': 'GOOD_HEALTH',
-                    'num_cores': 8,
-                    'num_physical_cores': 8,
-                    'total_phys_mem_bytes': 33079799808,
-                    'rack_id': 'rack_id_0',
-                    'tags': [],
-                },
-                {
-                    'host_id': ''.join(random.choices(string.ascii_uppercase + string.digits, k=8)),
-                    'name': 'host_8',
-                    'entity_status': 'GOOD_HEALTH',
-                    'num_cores': 8,
-                    'num_physical_cores': 8,
-                    'total_phys_mem_bytes': 33079799808,
-                    'rack_id': 'rack_id_0',
-                    'tags': [],
-                },
-                {
-                    'host_id': ''.join(random.choices(string.ascii_uppercase + string.digits, k=8)),
-                    'name': 'host_9',
-                    'entity_status': 'GOOD_HEALTH',
-                    'num_cores': 8,
-                    'num_physical_cores': 8,
-                    'total_phys_mem_bytes': 33079799808,
-                    'rack_id': 'rack_id_0',
-                    'tags': [],
-                },
-            ],
+            [make_host(name=f'host_{n}') for n in range(10)],
             [
                 {
                     'count': 1,
@@ -745,26 +644,8 @@ def test_autodiscover_hosts_with_include_config_errors(
                 {'name': 'cluster_0', 'entity_status': 'GOOD_HEALTH'},
             ],
             [
-                {
-                    'host_id': ''.join(random.choices(string.ascii_uppercase + string.digits, k=8)),
-                    'name': 'host_0',
-                    'entity_status': 'GOOD_HEALTH',
-                    'num_cores': 8,
-                    'num_physical_cores': 8,
-                    'total_phys_mem_bytes': 33079799808,
-                    'rack_id': 'rack_id_0',
-                    'tags': [],
-                },
-                {
-                    'host_id': ''.join(random.choices(string.ascii_uppercase + string.digits, k=8)),
-                    'name': 'tmp_0',
-                    'entity_status': 'GOOD_HEALTH',
-                    'num_cores': 8,
-                    'num_physical_cores': 8,
-                    'total_phys_mem_bytes': 33079799808,
-                    'rack_id': 'rack_id_0',
-                    'tags': [],
-                },
+                make_host(name='host_0'),
+                make_host(name='tmp_0'),
             ],
             [
                 {
@@ -829,26 +710,8 @@ def test_autodiscover_hosts_with_include_config_errors(
                 {'name': 'cluster_0', 'entity_status': 'GOOD_HEALTH'},
             ],
             [
-                {
-                    'host_id': ''.join(random.choices(string.ascii_uppercase + string.digits, k=8)),
-                    'name': 'host_0',
-                    'entity_status': 'GOOD_HEALTH',
-                    'num_cores': 8,
-                    'num_physical_cores': 8,
-                    'total_phys_mem_bytes': 33079799808,
-                    'rack_id': 'rack_id_0',
-                    'tags': [],
-                },
-                {
-                    'host_id': ''.join(random.choices(string.ascii_uppercase + string.digits, k=8)),
-                    'name': 'tmp_0',
-                    'entity_status': 'GOOD_HEALTH',
-                    'num_cores': 8,
-                    'num_physical_cores': 8,
-                    'total_phys_mem_bytes': 33079799808,
-                    'rack_id': 'rack_id_0',
-                    'tags': [],
-                },
+                make_host(name='host_0'),
+                make_host(name='tmp_0'),
             ],
             [
                 {
@@ -911,18 +774,7 @@ def test_autodiscover_hosts_with_include_config_errors(
             [
                 {'name': 'cluster_0', 'entity_status': 'GOOD_HEALTH'},
             ],
-            [
-                {
-                    'host_id': ''.join(random.choices(string.ascii_uppercase + string.digits, k=8)),
-                    'name': 'host_0',
-                    'entity_status': 'BAD_HEALTH',
-                    'num_cores': 8,
-                    'num_physical_cores': 8,
-                    'total_phys_mem_bytes': 33079799808,
-                    'rack_id': 'rack_id_0',
-                    'tags': [],
-                },
-            ],
+            [make_host(name='host_0', entity_status='BAD_HEALTH')],
             [
                 {
                     'count': 2,
@@ -972,16 +824,7 @@ def test_autodiscover_hosts_with_include_config_errors(
                 {'name': 'cluster_0', 'entity_status': 'GOOD_HEALTH'},
             ],
             [
-                {
-                    'host_id': ''.join(random.choices(string.ascii_uppercase + string.digits, k=8)),
-                    'name': 'host_0',
-                    'entity_status': 'BAD_HEALTH',
-                    'num_cores': 8,
-                    'num_physical_cores': 8,
-                    'total_phys_mem_bytes': 33079799808,
-                    'rack_id': 'rack_id_0',
-                    'tags': [],
-                },
+                make_host(entity_status='BAD_HEALTH'),
             ],
             [
                 {
@@ -1013,7 +856,6 @@ def test_autodiscover_hosts_with_include_config_errors(
         ),
     ],
     ids=[
-        'configured host autodiscover with zero hosts',
         'configured host autodiscover with two different prefix hosts',
         'configured host autodiscover with ten clusters and limit',
         'configured host autodiscover with two different prefix hosts and one of them excluded',
