@@ -134,16 +134,8 @@ BAD_USERS = [
 GOOD_USERS = [{'user': {'name': 'test_name', 'password': 'test_pass', 'domain': {'id': 'test_id'}}}]
 
 
-def _test_bad_user(user):
-    authenticator = Authenticator()
-    with pytest.raises(IncompleteIdentity):
-        authenticator._get_user_identity(user['user'])
-
-
 def test_get_user_identity():
     authenticator = Authenticator()
-    for user in BAD_USERS:
-        _test_bad_user(user)
 
     for user in GOOD_USERS:
         parsed_user = authenticator._get_user_identity(user['user'])
@@ -691,7 +683,15 @@ def test__get_paginated_list(requests_wrapper):
     instance["paginated_limit"] = 4
 
     with mock.patch("datadog_checks.openstack_controller.api.SimpleApi.connect"):
-        api = ApiFactory.create(log, instance, requests_wrapper)
+        api = ApiFactory.create(
+            log,
+            requests_wrapper,
+            instance.get("paginated_limit"),
+            instance.get("user"),
+            instance.get("openstack_config_file_path"),
+            instance.get("openstack_cloud_name"),
+            instance.get("keystone_server_url"),
+        )
     with mock.patch(
         "datadog_checks.openstack_controller.api.SimpleApi._make_request",
         side_effect=[
@@ -759,7 +759,15 @@ def test__make_request_failure(requests_wrapper):
     instance["paginated_limit"] = 4
 
     with mock.patch("datadog_checks.openstack_controller.api.SimpleApi.connect"):
-        api = ApiFactory.create(log, instance, requests_wrapper)
+        api = ApiFactory.create(
+            log,
+            requests_wrapper,
+            instance.get("paginated_limit"),
+            instance.get("user"),
+            instance.get("openstack_config_file_path"),
+            instance.get("openstack_cloud_name"),
+            instance.get("keystone_server_url"),
+        )
 
     response_mock = mock.MagicMock()
     with mock.patch("datadog_checks.openstack_controller.api.requests.get", return_value=response_mock):

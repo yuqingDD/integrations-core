@@ -28,9 +28,8 @@ from .common import CHECK_NAME, TEST_OPENSTACK_NO_AUTH_CONFIG_PATH
 )
 def test_config_invalid(instance, exception_msg):
 
-    check = OpenStackControllerCheck(CHECK_NAME, {}, [instance])
-
     with pytest.raises(Exception, match=exception_msg):
+        check = OpenStackControllerCheck(CHECK_NAME, {}, [instance])
         check.check(instance)
 
 
@@ -86,12 +85,12 @@ def test_config_invalid_openstack_auth(instance, exception_msg):
         ),
         pytest.param(
             {'name': 'test', 'keystone_server_url': 'http://localhost'},
-            'Please specify the user via the `user` variable in your init_config.',
+            'Please specify the user via the `user` variable in your openstack_controller configuration.',
             id='no user',
         ),
         pytest.param(
             {'name': 'test', 'keystone_server_url': 'http://localhost', 'user': {}},
-            'Please specify the user via the `user` variable in your init_config.',
+            'Please specify the user via the `user` variable in your openstack_controller configuration.',
             id='bad user',
         ),
         pytest.param(
@@ -100,7 +99,7 @@ def test_config_invalid_openstack_auth(instance, exception_msg):
                 'keystone_server_url': 'http://localhost',
                 'user': {'password': 'test_pass', 'domain': {'id': 'test_id'}},
             },
-            'Please specify the user via the `user` variable in your init_config.',
+            'Please specify the user via the `user` variable in your openstack_controller configuration.',
             id='no user name',
         ),
         pytest.param(
@@ -109,7 +108,7 @@ def test_config_invalid_openstack_auth(instance, exception_msg):
                 'keystone_server_url': 'http://localhost',
                 'user': {'name': 'test_name', 'domain': {'id': 'test_id'}},
             },
-            'Please specify the user via the `user` variable in your init_config.',
+            'Please specify the user via the `user` variable in your openstack_controller configuration',
             id='no user pw',
         ),
     ],
@@ -119,5 +118,5 @@ def test_config_warning(instance, warning_msg, caplog):
 
     check = OpenStackControllerCheck(CHECK_NAME, {}, [instance])
 
-    check.check(instance)
+    #check.check(instance)
     assert warning_msg in caplog.text

@@ -11,7 +11,6 @@ from six.moves.urllib.parse import urljoin
 
 from .exceptions import (
     AuthenticationNeeded,
-    IncompleteIdentity,
     InstancePowerOffFailure,
     KeystoneUnreachable,
     MissingNeutronEndpoint,
@@ -30,16 +29,19 @@ UNSCOPED_AUTH = 'unscoped'
 
 class ApiFactory(object):
     @staticmethod
-    def create(logger, instance_config, requests_wrapper):
-        paginated_limit = instance_config.get('paginated_limit', DEFAULT_PAGINATED_LIMIT)
-        user = instance_config.get("user")
-        openstack_config_file_path = instance_config.get("openstack_config_file_path")
-        openstack_cloud_name = instance_config.get("openstack_cloud_name")
+    def create(
+        logger,
+        requests_wrapper,
+        paginated_limit,
+        user,
+        openstack_config_file_path,
+        openstack_cloud_name,
+        keystone_server_url,
+    ):
 
         # If an OpenStack configuration is specified, an OpenstackSDKApi is created, and the authentication
         # is made directly from the OpenStack configuration file
         if openstack_cloud_name is None:
-            keystone_server_url = instance_config.get("keystone_server_url")
             api = SimpleApi(logger, keystone_server_url, requests_wrapper, limit=paginated_limit)
             api.connect(user)
         else:
@@ -536,18 +538,8 @@ class Authenticator(object):
     @staticmethod
     def _get_user_identity(user):
         """
-        Parse user identity out of init_config
-
-        To guarantee a uniquely identifiable user, expects
-        {"user": {"name": "my_username", "password": "my_password",
-                  "domain": {"id": "my_domain_id"}
-                  }
-        }
+        Creates an identify object for the POST request to create an auth token
         """
-        if not (
-            user and user.get('name') and user.get('password') and user.get("domain") and user.get("domain").get("id")
-        ):
-            raise IncompleteIdentity()
 
         identity = {"methods": ['password'], "password": {"user": user}}
         return identity

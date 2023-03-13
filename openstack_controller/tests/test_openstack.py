@@ -12,6 +12,8 @@ from requests.exceptions import HTTPError
 
 from datadog_checks.base import AgentCheck
 from datadog_checks.openstack_controller import OpenStackControllerCheck
+from datadog_checks.openstack_controller.settings import DEFAULT_PAGINATED_LIMIT
+
 from datadog_checks.openstack_controller.api import AbstractApi, Authenticator, SimpleApi
 from datadog_checks.openstack_controller.exceptions import IncompleteConfig, KeystoneUnreachable
 
@@ -130,7 +132,8 @@ def test_check_with_config_file(mock_api, aggregator):
     aggregator.assert_service_check('openstack.keystone.api.up', AgentCheck.OK)
     aggregator.assert_service_check('openstack.nova.api.up', AgentCheck.OK)
     aggregator.assert_service_check('openstack.neutron.api.up', AgentCheck.OK)
-    mock_api.assert_called_with(ANY, common.CONFIG_FILE_INSTANCE, ANY)
+
+    mock_api.assert_called_with(ANY, common.CONFIG_FILE_INSTANCE.get('paginated_limit', DEFAULT_PAGINATED_LIMIT), common.CONFIG_FILE_INSTANCE.get('user'), common.CONFIG_FILE_INSTANCE.get('openstack_config_file_path'), common.CONFIG_FILE_INSTANCE.get('openstack_cloud_name'), common.CONFIG_FILE_INSTANCE.get('keystone_server_url'), ANY)
 
 
 def get_server_details_response(params):

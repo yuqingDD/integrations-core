@@ -10,10 +10,11 @@ import requests
 from openstack.config.loader import OpenStackConfig
 from six import iteritems, itervalues
 
-from datadog_checks.base import AgentCheck, is_affirmative
+from datadog_checks.base import AgentCheck
 from datadog_checks.base.utils.common import pattern_filter
 
 from .api import ApiFactory
+from .config import OpenstackConfig
 from .exceptions import (
     AuthenticationNeeded,
     IncompleteConfig,
@@ -118,6 +119,9 @@ class OpenStackControllerCheck(AgentCheck):
         # Ex: _api = <api object>
         self._api = None
 
+        # Create config object and validate config
+        self._config = OpenstackConfig(self.instance, self.log)
+
         # BackOffRetry supports multiple instances
         self._backoff = BackOffRetry()
 
@@ -131,31 +135,6 @@ class OpenStackControllerCheck(AgentCheck):
         self.external_host_tags = {}
 
         self.external_host_tags = {}
-        self.instance_name = self.instance.get('name')
-        if not self.instance_name:
-            # We need a instance_name to identify this instance
-            raise IncompleteConfig("Missing name")
-
-        self.network_ids = self.instance.get('network_ids', [])
-        self.exclude_network_id_patterns = set(self.instance.get('exclude_network_ids', []))
-        self.exclude_network_id_rules = [re.compile(ex) for ex in self.exclude_network_id_patterns]
-        self.exclude_server_id_patterns = set(self.instance.get('exclude_server_ids', []))
-        self.exclude_server_id_rules = [re.compile(ex) for ex in self.exclude_server_id_patterns]
-        self.include_project_name_patterns = set(self.instance.get('whitelist_project_names', []))
-        self.include_project_name_rules = [re.compile(ex) for ex in self.include_project_name_patterns]
-        self.exclude_project_name_patterns = set(self.instance.get('blacklist_project_names', []))
-        self.exclude_project_name_rules = [re.compile(ex) for ex in self.exclude_project_name_patterns]
-
-        self.custom_tags = self.instance.get("tags", [])
-        self.collect_project_metrics = is_affirmative(self.instance.get('collect_project_metrics', True))
-        self.collect_hypervisor_metrics = is_affirmative(self.instance.get('collect_hypervisor_metrics', True))
-        self.collect_hypervisor_load = is_affirmative(self.instance.get('collect_hypervisor_load', True))
-        self.collect_network_metrics = is_affirmative(self.instance.get('collect_network_metrics', True))
-        self.collect_server_diagnostic_metrics = is_affirmative(
-            self.instance.get('collect_server_diagnostic_metrics', True)
-        )
-        self.collect_server_flavor_metrics = is_affirmative(self.instance.get('collect_server_flavor_metrics', True))
-        self.use_shortname = is_affirmative(self.instance.get('use_shortname', False))
 
     def delete_api_cache(self):
         self._api = None
@@ -616,7 +595,7 @@ class OpenStackControllerCheck(AgentCheck):
         ):
             self.service_check(self.NETWORK_API_SC, AgentCheck.CRITICAL, tags=service_check_tags)
 
-    def init_api(self, instance_config, keystone_server_url, custom_tags):
+    def init_api(self, keystone_server_url, custom_tags):
         """
         Guarantees a valid auth scope for this instance, and returns it
 
@@ -630,9 +609,17 @@ class OpenStackControllerCheck(AgentCheck):
             # authentication previously failed and got removed from the cache
             # Let's populate it now
             try:
-                self.log.debug("Fetch scope for instance %s", self.instance_name)
+                self.log.debug("Fetch scope for instance %s", self._config.instance_name)
                 # Set keystone api with proper token
-                self._api = ApiFactory.create(self.log, instance_config, self.http)
+                self._api = ApiFactory.create(
+                    self.log,
+                    self._config.paginated_limit,
+                    self._config.user,
+                    self._config.openstack_config_file_path,
+                    self._config.openstack_cloud_name,
+                    self._config.keystone_server_url,
+                    self.http,
+                )
                 self.service_check(
                     self.IDENTITY_API_SC,
                     AgentCheck.OK,
@@ -695,13 +682,13 @@ class OpenStackControllerCheck(AgentCheck):
         try:
             # Authenticate and add the instance api to apis cache
             keystone_server_url = self._get_keystone_server_url(instance)
-            self.init_api(instance, keystone_server_url, self.custom_tags)
+            self.init_api(keystone_server_url, self._config.custom_tags)
             if self._api is None:
                 self.log.info("Not api found, make sure you admin user has access to your OpenStack projects: \n")
                 return
 
             self.log.debug("Running check with credentials: \n")
-            self._send_api_service_checks(keystone_server_url, self.custom_tags)
+            self._send_api_service_checks(keystone_server_url, self._config.custom_tags)
             # Artificial metric introduced to distinguish between old and new openstack integrations
             self.gauge("openstack.controller", 1)
 
@@ -709,30 +696,30 @@ class OpenStackControllerCheck(AgentCheck):
             # TODO: NOTE: During authentication we use /v3/auth/projects and here we use /v3/projects.
             # TODO: These api don't seems to return the same thing however the latter contains the former.
             # TODO: Is this expected or could we just have one call with proper config?
-            projects = self.get_projects(self.include_project_name_rules, self.exclude_project_name_rules)
+            projects = self.get_projects(self._config.include_project_name_rules, self._config.exclude_project_name_rules)
 
-            if self.collect_project_metrics:
+            if self._config.collect_project_metrics:
                 for project in itervalues(projects):
-                    self.collect_project_limit(project, self.custom_tags)
+                    self.collect_project_limit(project, self._config.custom_tags)
 
-            servers = self.populate_servers_cache(projects, self.exclude_server_id_rules)
+            servers = self.populate_servers_cache(projects, self._config.exclude_server_id_rules)
 
             self.collect_hypervisors_metrics(
                 servers,
-                custom_tags=self.custom_tags,
-                use_shortname=self.use_shortname,
-                collect_hypervisor_metrics=self.collect_hypervisor_metrics,
-                collect_hypervisor_load=self.collect_hypervisor_load,
+                custom_tags=self._config.custom_tags,
+                use_shortname=self._config.use_shortname,
+                collect_hypervisor_metrics=self._config.collect_hypervisor_metrics,
+                collect_hypervisor_load=self._config.collect_hypervisor_load,
             )
 
-            if self.collect_server_diagnostic_metrics or self.collect_server_flavor_metrics:
-                if self.collect_server_diagnostic_metrics:
+            if self._config.collect_server_diagnostic_metrics or self._config.collect_server_flavor_metrics:
+                if self._config.collect_server_diagnostic_metrics:
                     self.log.debug("Fetch stats from %s server(s)", len(servers))
                     for server in itervalues(servers):
                         self.collect_server_diagnostic_metrics(
-                            server, tags=self.custom_tags, use_shortname=self.use_shortname
+                            server, tags=self._config.custom_tags, use_shortname=self._config.use_shortname
                         )
-                if self.collect_server_flavor_metrics:
+                if self._config.collect_server_flavor_metrics:
                     if len(servers) >= 1 and 'flavor_id' in next(itervalues(servers)):
                         self.log.debug("Fetch server flavors")
                         # If flavors are not part of servers detail (new in version 2.47) then we need to fetch them
@@ -741,18 +728,18 @@ class OpenStackControllerCheck(AgentCheck):
                         flavors = None
                     for server in itervalues(servers):
                         self.collect_server_flavor_metrics(
-                            server, flavors, tags=self.custom_tags, use_shortname=self.use_shortname
+                            server, flavors, tags=self._config.custom_tags, use_shortname=self._config.use_shortname
                         )
 
-            if self.collect_network_metrics:
-                self.collect_networks_metrics(self.custom_tags, self.network_ids, self.exclude_network_id_rules)
+            if self._config.collect_network_metrics:
+                self.collect_networks_metrics(self._config.custom_tags, self._config.network_ids, self._config.exclude_network_id_rules)
 
             self.set_external_tags(self.get_external_host_tags())
 
         except IncompleteConfig as e:
             if isinstance(e, IncompleteIdentity):
                 self.warning(
-                    "Please specify the user via the `user` variable in your init_config.\n"
+                    "Please specify the user via the `user` variable in your openstack_controller configuration.\n"
                     "This is the user you would use to authenticate with Keystone v3 via password auth.\n"
                     "The user should look like: "
                     "{'password': 'my_password', 'name': 'my_name', 'domain': {'id': 'my_domain_id'}}"
@@ -767,7 +754,7 @@ class OpenStackControllerCheck(AgentCheck):
                 self.warning("Error reaching nova API: %s", e)
             else:
                 # exponential backoff
-                self.do_backoff(self.custom_tags)
+                self.do_backoff(self._config.custom_tags)
                 return
 
         self._backoff.reset_backoff()
