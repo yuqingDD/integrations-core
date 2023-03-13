@@ -41,11 +41,11 @@ class InstanceConfig(BaseModel):
     class Config:
         allow_mutation = False
 
+    connection_timeout: Optional[int]
     custom_queries: Optional[Sequence[CustomQuery]]
     db: str
     disable_generic_tags: Optional[bool]
     empty_default_hostname: Optional[bool]
-    extra_connection_parametters: Optional[Sequence[str]]
     host: Optional[str]
     metric_patterns: Optional[MetricPatterns]
     min_collection_interval: Optional[float]
