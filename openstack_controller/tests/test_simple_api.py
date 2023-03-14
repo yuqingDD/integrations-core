@@ -12,7 +12,6 @@ import simplejson as json
 from datadog_checks.openstack_controller.api import ApiFactory, Authenticator, Credential, SimpleApi
 from datadog_checks.openstack_controller.exceptions import (
     AuthenticationNeeded,
-    IncompleteIdentity,
     InstancePowerOffFailure,
     MissingNeutronEndpoint,
     MissingNovaEndpoint,

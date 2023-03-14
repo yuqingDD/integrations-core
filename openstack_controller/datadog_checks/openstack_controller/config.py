@@ -4,6 +4,8 @@
 
 import re
 
+from openstack.config.loader import OpenStackConfig as OpenStackSdkConfig
+
 from datadog_checks.base import is_affirmative
 
 from .exceptions import IncompleteConfig
@@ -43,11 +45,6 @@ class OpenstackConfig(object):
         self.validate_config()
 
     def validate_config(self):
-
-        # We need a instance_name to identify this instance
-        if not self.instance_name:
-            raise IncompleteConfig("Missing name")
-
         """
         Parse user identity out of config
 
@@ -71,3 +68,12 @@ class OpenstackConfig(object):
                     "The user should look like: "
                     "{'password': 'my_password', 'name': 'my_name', 'domain': {'id': 'my_domain_id'}}"
                 )
+
+        if not self.openstack_config_file_path and not self.keystone_server_url:
+            raise IncompleteConfig("Either keystone_server_url or openstack_config_file_path need to be provided")
+
+        if self.keystone_server_url is None:
+            self.openstack_config = OpenStackSdkConfig(config_files=[self.openstack_config_file_path])
+            cloud = self.openstack_config.get_one(cloud=self.openstack_cloud_name)
+            cloud_auth = cloud.get_auth()
+            self.keystone_server_url = cloud_auth.auth_url

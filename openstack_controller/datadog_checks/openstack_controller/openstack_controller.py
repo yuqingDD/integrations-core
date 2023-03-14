@@ -7,7 +7,6 @@ from collections import defaultdict
 from datetime import datetime
 
 import requests
-from openstack.config.loader import OpenStackConfig
 from six import iteritems, itervalues
 
 from datadog_checks.base import AgentCheck
@@ -18,7 +17,6 @@ from .config import OpenstackConfig
 from .exceptions import (
     AuthenticationNeeded,
     IncompleteConfig,
-    IncompleteIdentity,
     InstancePowerOffFailure,
     KeystoneUnreachable,
     MissingNeutronEndpoint,
@@ -139,27 +137,29 @@ class OpenStackControllerCheck(AgentCheck):
     def delete_api_cache(self):
         self._api = None
 
-    def collect_networks_metrics(self, tags, network_ids, exclude_network_id_rules):
+    def collect_networks_metrics(self):
         """
         Collect stats for all reachable networks
         """
         networks = self.get_networks()
         filtered_networks = []
-        if not network_ids:
+        if not self._config.network_ids:
             # Filter out excluded networks
             filtered_networks = [
                 network
                 for network in networks
-                if not any([re.match(exclude_id, network.get('id')) for exclude_id in exclude_network_id_rules])
+                if not any(
+                    [re.match(exclude_id, network.get('id')) for exclude_id in self._config.exclude_network_id_rules]
+                )
             ]
         else:
             for network in networks:
-                if network.get('id') in network_ids:
+                if network.get('id') in self._config.network_ids:
                     filtered_networks.append(network)
 
         for network in filtered_networks:
             network_id = network.get('id')
-            service_check_tags = ['network:{}'.format(network_id)] + tags
+            service_check_tags = ['network:{}'.format(network_id)] + self._config.custom_tags
 
             network_name = network.get('name')
             if network_name:
@@ -203,14 +203,7 @@ class OpenStackControllerCheck(AgentCheck):
         uptime = self.get_os_hypervisor_uptime(hypervisor)
         return self._parse_uptime_string(uptime)
 
-    def collect_hypervisors_metrics(
-        self,
-        servers,
-        custom_tags=None,
-        use_shortname=False,
-        collect_hypervisor_metrics=True,
-        collect_hypervisor_load=False,
-    ):
+    def collect_hypervisors_metrics(self, servers):
         """
         Submits stats for all hypervisors registered to this control plane
         Raises specific exceptions based on response code
@@ -229,28 +222,13 @@ class OpenStackControllerCheck(AgentCheck):
 
         hypervisors = self.get_os_hypervisors_detail()
         for hyp in hypervisors:
-            self.get_stats_for_single_hypervisor(
-                hyp,
-                hyp_project_names,
-                custom_tags=custom_tags,
-                use_shortname=use_shortname,
-                collect_hypervisor_metrics=collect_hypervisor_metrics,
-                collect_hypervisor_load=collect_hypervisor_load,
-            )
+            self.get_stats_for_single_hypervisor(hyp, hyp_project_names)
         if not hypervisors:
             self.warning("Unable to collect any hypervisors from Nova response.")
 
-    def get_stats_for_single_hypervisor(
-        self,
-        hyp,
-        hyp_project_names,
-        custom_tags=None,
-        use_shortname=False,
-        collect_hypervisor_metrics=True,
-        collect_hypervisor_load=True,
-    ):
+    def get_stats_for_single_hypervisor(self, hyp, hyp_project_names):
         hyp_hostname = hyp.get('hypervisor_hostname')
-        custom_tags = custom_tags or []
+        custom_tags = self._config.custom_tags or []
         tags = [
             'hypervisor:{}'.format(hyp_hostname),
             'hypervisor_id:{}'.format(hyp['id']),
@@ -263,7 +241,7 @@ class OpenStackControllerCheck(AgentCheck):
         for project_name in project_names:
             tags.append('project_name:{}'.format(project_name))
 
-        host_tags = self._get_host_aggregate_tag(hyp_hostname, use_shortname=use_shortname)
+        host_tags = self._get_host_aggregate_tag(hyp_hostname)
         tags.extend(host_tags)
         tags.extend(custom_tags)
         service_check_tags = list(custom_tags)
@@ -277,7 +255,7 @@ class OpenStackControllerCheck(AgentCheck):
         else:
             self.service_check(self.HYPERVISOR_SC, AgentCheck.OK, hostname=hyp_hostname, tags=service_check_tags)
 
-        if not collect_hypervisor_metrics:
+        if not self._config.collect_hypervisor_metrics:
             return
 
         for label, val in iteritems(hyp):
@@ -288,7 +266,7 @@ class OpenStackControllerCheck(AgentCheck):
         # This makes a request per hypervisor and only sends hypervisor_load 1/5/15
         # Disable this by default for higher performance in a large environment
         # If the Agent is installed on the hypervisors, system.load.1/5/15 is available as a system metric
-        if collect_hypervisor_load:
+        if self._config.collect_hypervisor_load:
             try:
                 load_averages = self.get_loads_for_single_hypervisor(hyp)
             except Exception as e:
@@ -359,7 +337,7 @@ class OpenStackControllerCheck(AgentCheck):
 
     # Get all of the server IDs and their metadata and cache them
     # After the first run, we will only get servers that have changed state since the last collection run
-    def populate_servers_cache(self, projects, exclude_server_id_rules):
+    def populate_servers_cache(self, projects):
         # projects is being fetched from
         # https://developer.openstack.org/api-ref/identity/v3/?expanded=list-projects-detail#list-projects
         # It has an id (project id) and a name (project name)
@@ -384,25 +362,25 @@ class OpenStackControllerCheck(AgentCheck):
         # Filter out excluded servers
         servers = {}
         for updated_server_id, updated_server in iteritems(updated_servers):
-            if not any([re.match(rule, updated_server_id) for rule in exclude_server_id_rules]):
+            if not any([re.match(rule, updated_server_id) for rule in self._config.exclude_server_id_rules]):
                 servers[updated_server_id] = updated_server
 
         # Initialize or update cache for this instance
         self.servers_cache = {'servers': servers, 'changes_since': changes_since}
         return servers
 
-    def collect_server_diagnostic_metrics(self, server_details, tags=None, use_shortname=False):
+    def collect_server_diagnostic_metrics(self, server_details):
         def _is_valid_metric(label):
             return label in NOVA_SERVER_METRICS or any(seg in label for seg in NOVA_SERVER_INTERFACE_SEGMENTS)
 
         def _is_interface_metric(label):
             return any(seg in label for seg in NOVA_SERVER_INTERFACE_SEGMENTS)
 
-        tags = tags or []
+        tags = self._config.custom_tags or []
         tags = copy.deepcopy(tags)
         tags.append("nova_managed_server")
         hypervisor_hostname = server_details.get('hypervisor_hostname')
-        host_tags = self._get_host_aggregate_tag(hypervisor_hostname, use_shortname=use_shortname)
+        host_tags = self._get_host_aggregate_tag(hypervisor_hostname)
         host_tags.append('availability_zone:{}'.format(server_details.get('availability_zone', 'NA')))
         self.external_host_tags[server_details.get('server_name')] = host_tags
 
@@ -461,13 +439,13 @@ class OpenStackControllerCheck(AgentCheck):
             # TODO: Server stats returned by newer hypervisors have a different format.
             # https://docs.openstack.org/api-ref/compute/?expanded=show-server-diagnostics-detail
 
-    def collect_project_limit(self, project, tags=None):
+    def collect_project_limit(self, project):
         # NOTE: starting from Version 3.10 (Queens)
         # We can use /v3/limits (Unified Limits API) if not experimental any more.
         def _is_valid_metric(label):
             return label in PROJECT_METRICS
 
-        tags = tags or []
+        tags = self._config.custom_tags or []
 
         server_tags = copy.deepcopy(tags)
         project_name = project.get('name')
@@ -505,12 +483,12 @@ class OpenStackControllerCheck(AgentCheck):
             'swap': 0 if flavor.get('swap') == '' else flavor.get('swap'),
         }
 
-    def collect_server_flavor_metrics(self, server_details, flavors, tags=None, use_shortname=False):
-        tags = tags or []
+    def collect_server_flavor_metrics(self, server_details, flavors):
+        tags = self._config.custom_tags or []
         tags = copy.deepcopy(tags)
         tags.append("nova_managed_server")
         hypervisor_hostname = server_details.get('hypervisor_hostname')
-        host_tags = self._get_host_aggregate_tag(hypervisor_hostname, use_shortname=use_shortname)
+        host_tags = self._get_host_aggregate_tag(hypervisor_hostname)
         host_tags.append('availability_zone:{}'.format(server_details.get('availability_zone', 'NA')))
         self.external_host_tags[server_details.get('server_name')] = host_tags
 
@@ -544,12 +522,12 @@ class OpenStackControllerCheck(AgentCheck):
         )
         self.gauge("openstack.nova.server.flavor.swap", flavor.get('swap'), tags=tags + host_tags, hostname=server_id)
 
-    def _get_host_aggregate_tag(self, hyp_hostname, use_shortname=False):
+    def _get_host_aggregate_tag(self, hyp_hostname):
         tags = []
         if not hyp_hostname:
             return tags
 
-        hyp_hostname = hyp_hostname.split('.')[0] if use_shortname else hyp_hostname
+        hyp_hostname = hyp_hostname.split('.')[0] if self._config.use_shortname else hyp_hostname
         aggregate_list = self.get_all_aggregate_hypervisors()
         if hyp_hostname in aggregate_list:
             tags.append('aggregate:{}'.format(aggregate_list[hyp_hostname].get('aggregate', "unknown")))
@@ -567,9 +545,9 @@ class OpenStackControllerCheck(AgentCheck):
 
         return tags
 
-    def _send_api_service_checks(self, keystone_server_url, tags):
+    def _send_api_service_checks(self):
         # Nova
-        service_check_tags = ["keystone_server: {}".format(keystone_server_url)] + tags
+        service_check_tags = ["keystone_server: {}".format(self._config.keystone_server_url)] + self._config.custom_tags
         try:
             self.get_nova_endpoint()
             self.service_check(self.COMPUTE_API_SC, AgentCheck.OK, tags=service_check_tags)
@@ -595,14 +573,14 @@ class OpenStackControllerCheck(AgentCheck):
         ):
             self.service_check(self.NETWORK_API_SC, AgentCheck.CRITICAL, tags=service_check_tags)
 
-    def init_api(self, keystone_server_url, custom_tags):
+    def init_api(self):
         """
         Guarantees a valid auth scope for this instance, and returns it
 
         Communicates with the identity server and initializes a new scope when one is absent, or has been forcibly
         removed due to token expiry
         """
-        custom_tags = custom_tags or []
+        custom_tags = self._config.custom_tags or []
 
         if self._api is None:
             # We are missing the entire instance scope either because it is the first time we initialize it or because
@@ -613,29 +591,29 @@ class OpenStackControllerCheck(AgentCheck):
                 # Set keystone api with proper token
                 self._api = ApiFactory.create(
                     self.log,
+                    self.http,
                     self._config.paginated_limit,
                     self._config.user,
                     self._config.openstack_config_file_path,
                     self._config.openstack_cloud_name,
                     self._config.keystone_server_url,
-                    self.http,
                 )
                 self.service_check(
                     self.IDENTITY_API_SC,
                     AgentCheck.OK,
-                    tags=["keystone_server: {}".format(keystone_server_url)] + custom_tags,
+                    tags=["keystone_server: {}".format(self._config.keystone_server_url)] + custom_tags,
                 )
             except KeystoneUnreachable as e:
                 self.warning(
                     "The agent could not contact the specified identity server at `%s`. "
                     "Are you sure it is up at that address?",
-                    keystone_server_url,
+                    self._config.keystone_server_url,
                 )
                 self.log.debug("Problem grabbing auth token: %s", e)
                 self.service_check(
                     self.IDENTITY_API_SC,
                     AgentCheck.CRITICAL,
-                    tags=["keystone_server: {}".format(keystone_server_url)] + custom_tags,
+                    tags=["keystone_server: {}".format(self._config.keystone_server_url)] + custom_tags,
                 )
 
                 # If Keystone is down/unreachable, we default the
@@ -643,12 +621,12 @@ class OpenStackControllerCheck(AgentCheck):
                 self.service_check(
                     self.NETWORK_API_SC,
                     AgentCheck.UNKNOWN,
-                    tags=["keystone_server: {}".format(keystone_server_url)] + custom_tags,
+                    tags=["keystone_server: {}".format(self._config.keystone_server_url)] + custom_tags,
                 )
                 self.service_check(
                     self.COMPUTE_API_SC,
                     AgentCheck.UNKNOWN,
-                    tags=["keystone_server: {}".format(keystone_server_url)] + custom_tags,
+                    tags=["keystone_server: {}".format(self._config.keystone_server_url)] + custom_tags,
                 )
 
             except MissingNovaEndpoint as e:
@@ -657,7 +635,7 @@ class OpenStackControllerCheck(AgentCheck):
                 self.service_check(
                     self.COMPUTE_API_SC,
                     AgentCheck.CRITICAL,
-                    tags=["keystone_server: {}".format(keystone_server_url)] + custom_tags,
+                    tags=["keystone_server: {}".format(self._config.keystone_server_url)] + custom_tags,
                 )
 
             except MissingNeutronEndpoint:
@@ -665,14 +643,14 @@ class OpenStackControllerCheck(AgentCheck):
                 self.service_check(
                     self.NETWORK_API_SC,
                     AgentCheck.CRITICAL,
-                    tags=["keystone_server: {}".format(keystone_server_url)] + custom_tags,
+                    tags=["keystone_server: {}".format(self._config.keystone_server_url)] + custom_tags,
                 )
 
         if self._api is None:
             # Fast fail in the absence of an api
             raise IncompleteConfig("Could not initialise Openstack API")
 
-    def check(self, instance):
+    def check(self, _):
 
         # have we been backed off
         if not self._backoff.should_run():
@@ -681,14 +659,13 @@ class OpenStackControllerCheck(AgentCheck):
 
         try:
             # Authenticate and add the instance api to apis cache
-            keystone_server_url = self._get_keystone_server_url(instance)
-            self.init_api(keystone_server_url, self._config.custom_tags)
+            self.init_api()
             if self._api is None:
                 self.log.info("Not api found, make sure you admin user has access to your OpenStack projects: \n")
                 return
 
             self.log.debug("Running check with credentials: \n")
-            self._send_api_service_checks(keystone_server_url, self._config.custom_tags)
+            self._send_api_service_checks()
             # Artificial metric introduced to distinguish between old and new openstack integrations
             self.gauge("openstack.controller", 1)
 
@@ -696,29 +673,21 @@ class OpenStackControllerCheck(AgentCheck):
             # TODO: NOTE: During authentication we use /v3/auth/projects and here we use /v3/projects.
             # TODO: These api don't seems to return the same thing however the latter contains the former.
             # TODO: Is this expected or could we just have one call with proper config?
-            projects = self.get_projects(self._config.include_project_name_rules, self._config.exclude_project_name_rules)
+            projects = self.get_projects()
 
             if self._config.collect_project_metrics:
                 for project in itervalues(projects):
-                    self.collect_project_limit(project, self._config.custom_tags)
+                    self.collect_project_limit(project)
 
-            servers = self.populate_servers_cache(projects, self._config.exclude_server_id_rules)
+            servers = self.populate_servers_cache(projects)
 
-            self.collect_hypervisors_metrics(
-                servers,
-                custom_tags=self._config.custom_tags,
-                use_shortname=self._config.use_shortname,
-                collect_hypervisor_metrics=self._config.collect_hypervisor_metrics,
-                collect_hypervisor_load=self._config.collect_hypervisor_load,
-            )
+            self.collect_hypervisors_metrics(servers)
 
             if self._config.collect_server_diagnostic_metrics or self._config.collect_server_flavor_metrics:
                 if self._config.collect_server_diagnostic_metrics:
                     self.log.debug("Fetch stats from %s server(s)", len(servers))
                     for server in itervalues(servers):
-                        self.collect_server_diagnostic_metrics(
-                            server, tags=self._config.custom_tags, use_shortname=self._config.use_shortname
-                        )
+                        self.collect_server_diagnostic_metrics(server)
                 if self._config.collect_server_flavor_metrics:
                     if len(servers) >= 1 and 'flavor_id' in next(itervalues(servers)):
                         self.log.debug("Fetch server flavors")
@@ -727,25 +696,15 @@ class OpenStackControllerCheck(AgentCheck):
                     else:
                         flavors = None
                     for server in itervalues(servers):
-                        self.collect_server_flavor_metrics(
-                            server, flavors, tags=self._config.custom_tags, use_shortname=self._config.use_shortname
-                        )
+                        self.collect_server_flavor_metrics(server, flavors)
 
             if self._config.collect_network_metrics:
-                self.collect_networks_metrics(self._config.custom_tags, self._config.network_ids, self._config.exclude_network_id_rules)
+                self.collect_networks_metrics()
 
             self.set_external_tags(self.get_external_host_tags())
 
         except IncompleteConfig as e:
-            if isinstance(e, IncompleteIdentity):
-                self.warning(
-                    "Please specify the user via the `user` variable in your openstack_controller configuration.\n"
-                    "This is the user you would use to authenticate with Keystone v3 via password auth.\n"
-                    "The user should look like: "
-                    "{'password': 'my_password', 'name': 'my_name', 'domain': {'id': 'my_domain_id'}}"
-                )
-            else:
-                self.warning("Configuration Incomplete: %s! Check your openstack_controller config file", e)
+            self.warning("Could not create the openstack API: %s! Check your openstack_controller config file", e)
         except AuthenticationNeeded:
             # Delete the scope, we'll populate a new one on the next run for this instance
             self.delete_api_cache()
@@ -754,16 +713,16 @@ class OpenStackControllerCheck(AgentCheck):
                 self.warning("Error reaching nova API: %s", e)
             else:
                 # exponential backoff
-                self.do_backoff(self._config.custom_tags)
+                self.do_backoff()
                 return
 
         self._backoff.reset_backoff()
 
-    def do_backoff(self, tags):
+    def do_backoff(self):
         backoff_interval, retries = self._backoff.do_backoff()
 
-        self.gauge("openstack.backoff.interval", backoff_interval, tags=tags)
-        self.gauge("openstack.backoff.retries", retries, tags=tags)
+        self.gauge("openstack.backoff.interval", backoff_interval, tags=self._config.custom_tags)
+        self.gauge("openstack.backoff.retries", retries, tags=self._config.custom_tags)
         self.warning("There were some problems reaching the nova API - applying exponential backoff")
 
     # For attaching tags to hosts that are not the host running the agent
@@ -806,14 +765,16 @@ class OpenStackControllerCheck(AgentCheck):
         return self._api.get_flavors_detail(query_params)
 
     # Keystone Proxy Methods
-    def get_projects(self, include_project_name_rules, exclude_project_name_rules):
+    def get_projects(self):
         projects = self._api.get_projects()
         project_by_name = {}
         for project in projects:
             name = project.get('name')
             project_by_name[name] = project
         filtered_project_names = pattern_filter(
-            [p for p in project_by_name], whitelist=include_project_name_rules, blacklist=exclude_project_name_rules
+            [p for p in project_by_name],
+            whitelist=self._config.include_project_name_rules,
+            blacklist=self._config.exclude_project_name_rules,
         )
         result = {name: v for (name, v) in iteritems(project_by_name) if name in filtered_project_names}
         return result
@@ -824,22 +785,3 @@ class OpenStackControllerCheck(AgentCheck):
 
     def get_networks(self):
         return self._api.get_networks()
-
-    def _get_keystone_server_url(self, instance_config):
-        keystone_server_url = instance_config.get("keystone_server_url")
-        if keystone_server_url:
-            return keystone_server_url
-
-        openstack_config_file_path = instance_config.get("openstack_config_file_path")
-        if not openstack_config_file_path and not keystone_server_url:
-            raise IncompleteConfig("Either keystone_server_url or openstack_config_file_path need to be provided")
-
-        openstack_cloud_name = instance_config.get("openstack_cloud_name")
-        openstack_config = OpenStackConfig(config_files=[openstack_config_file_path])
-        cloud = openstack_config.get_one(cloud=openstack_cloud_name)
-        cloud_auth = cloud.get_auth()
-        if not cloud_auth or not cloud_auth.auth_url:
-            raise IncompleteConfig(
-                'No auth_url found for cloud {} in {}', openstack_cloud_name, openstack_config_file_path
-            )
-        return cloud_auth.auth_url

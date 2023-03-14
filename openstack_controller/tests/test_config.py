@@ -14,28 +14,11 @@ from .common import CHECK_NAME, TEST_OPENSTACK_NO_AUTH_CONFIG_PATH
 @pytest.mark.parametrize(
     'instance, exception_msg',
     [
-        pytest.param({'user': {'domain': {'id': 'test_id'}}}, 'Missing name', id='empty'),
-        pytest.param({'user': {'domain': {'id': 'test_id'}}}, 'Missing name', id='empty name'),
         pytest.param(
-            {
-                'user': {'name': 'test_name', 'password': 'test_pass', 'domain': {'id': 'test_id'}},
-                'openstack_config_file_path': 'test',
-            },
-            'Missing name',
-            id='no name, keystone_server_url, cfg path',
+            {'name': 'test'},
+            'Either keystone_server_url or openstack_config_file_path need to be provided',
+            id='no keystone_server_url, no cfg path',
         ),
-    ],
-)
-def test_config_invalid(instance, exception_msg):
-
-    with pytest.raises(Exception, match=exception_msg):
-        check = OpenStackControllerCheck(CHECK_NAME, {}, [instance])
-        check.check(instance)
-
-
-@pytest.mark.parametrize(
-    'instance, exception_msg',
-    [
         pytest.param(
             {
                 'user': {'name': 'test_name', 'password': 'test_pass', 'domain': {'id': 'test_id'}},
@@ -53,7 +36,7 @@ def test_config_invalid(instance, exception_msg):
                 'name': 'test',
             },
             'Auth plugin requires parameters which were not given: auth_url',
-            id='openstack_config_file_path doesn\' exist',
+            id='openstack_config_file_path doesn\'t exist',
         ),
         pytest.param(
             {
@@ -69,20 +52,14 @@ def test_config_invalid(instance, exception_msg):
 )
 def test_config_invalid_openstack_auth(instance, exception_msg):
 
-    check = OpenStackControllerCheck(CHECK_NAME, {}, [instance])
-
     with pytest.raises(Exception, match=exception_msg):
+        check = OpenStackControllerCheck(CHECK_NAME, {}, [instance])
         check.check(instance)
 
 
 @pytest.mark.parametrize(
     'instance, warning_msg',
     [
-        pytest.param(
-            {'name': 'test'},
-            'Either keystone_server_url or openstack_config_file_path need to be provided',
-            id='no keystone_server_url, no cfg path',
-        ),
         pytest.param(
             {'name': 'test', 'keystone_server_url': 'http://localhost'},
             'Please specify the user via the `user` variable in your openstack_controller configuration.',
@@ -116,7 +93,5 @@ def test_config_invalid_openstack_auth(instance, exception_msg):
 def test_config_warning(instance, warning_msg, caplog):
     caplog.set_level(logging.WARN)
 
-    check = OpenStackControllerCheck(CHECK_NAME, {}, [instance])
-
-    #check.check(instance)
+    OpenStackControllerCheck(CHECK_NAME, {}, [instance])
     assert warning_msg in caplog.text
