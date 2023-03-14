@@ -375,43 +375,6 @@ def test_collect_server_metrics_pre_2_48(server_diagnostics, os_aggregates, aggr
     aggregator.assert_all_metrics_covered()
 
 
-""""
-def test_get_keystone_url_from_openstack_config():
-    check = OpenStackControllerCheck(
-        "test", {'ssl_verify': False, 'paginated_server_limit': 1}, [common.CONFIG_FILE_INSTANCE]
-    )
-    keystone_server_url = check._get_keystone_server_url(common.CONFIG_FILE_INSTANCE)
-    assert keystone_server_url == 'http://xxx.xxx.xxx.xxx:5000/v2.0/'
-
-
-def test_get_keystone_url_from_datadog_config():
-    check = OpenStackControllerCheck(
-        "test", {'ssl_verify': False, 'paginated_server_limit': 1}, [common.KEYSTONE_INSTANCE]
-    )
-    keystone_server_url = check._get_keystone_server_url(common.KEYSTONE_INSTANCE)
-    assert keystone_server_url == 'http://10.0.2.15:5000'
-
-
-def test_get_keystone_url_from_implicit_openstack_config():
-    # This test is for documentation purposes because it is really testing OpenStackConfig
-    instance = copy.deepcopy(common.CONFIG_FILE_INSTANCE)
-    instance['openstack_cloud_name'] = 'rackspace'
-    check = OpenStackControllerCheck("test", {}, [instance])
-    keystone_server_url = check._get_keystone_server_url(instance)
-    assert keystone_server_url == 'https://identity.api.rackspacecloud.com/v2.0/'
-
-
-def test_missing_keystone_server_url():
-    # This test is for documentation purposes because it is really testing OpenStackConfig
-    instance = copy.deepcopy(common.KEYSTONE_INSTANCE)
-    instance['keystone_server_url'] = None
-    check = OpenStackControllerCheck("test", {}, [instance])
-
-    with pytest.raises(IncompleteConfig):
-        check._get_keystone_server_url(instance)
-"""
-
-
 @pytest.mark.parametrize(
     'test_case, extra_config, expected_http_kwargs',
     [
